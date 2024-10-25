@@ -1,5 +1,5 @@
-#ifndef LAYERED_HARDWARE_DYNAMIXEL_DYNAMIXEL_ACTUATOR_HPP
-#define LAYERED_HARDWARE_DYNAMIXEL_DYNAMIXEL_ACTUATOR_HPP
+#ifndef LAYERED_HARDWARE_DYNAMIXEL_DYNAMIXEL_ACTUATOR_DRIVER_HPP
+#define LAYERED_HARDWARE_DYNAMIXEL_DYNAMIXEL_ACTUATOR_DRIVER_HPP
 
 #include <cstdint>
 #include <memory>
@@ -31,10 +31,10 @@
 
 namespace layered_hardware_dynamixel {
 
-class DynamixelActuator {
+class DynamixelActuatorDriver {
 public:
-  DynamixelActuator(const std::string &name, const YAML::Node &params,
-                    const std::shared_ptr<DynamixelWorkbench> &dxl_wb) {
+  DynamixelActuatorDriver(const std::string &name, const YAML::Node &params,
+                          const std::shared_ptr<DynamixelWorkbench> &dxl_wb) {
     // parse parameters for this actuator
     std::uint8_t id;
     double torque_constant;
@@ -57,8 +57,7 @@ public:
     // find dynamixel actuator by id
     if (!ping(context_)) {
       std::ostringstream msg;
-      msg << "Failed to ping the actuator \"" << name << "\" actuator (id: " << static_cast<int>(id)
-          << ")";
+      msg << "Failed to ping " << get_display_name(*context_);
       throw std::runtime_error(msg.str());
     }
 
@@ -67,13 +66,13 @@ public:
       try {
         mapped_modes_.emplace_back(make_operating_mode(mode_name));
       } catch (const std::runtime_error &error) {
-        throw std::runtime_error("Invalid value in \"operating_mode_map\" parameter for \"" + name +
-                                 "\" actuator: " + error.what());
+        throw std::runtime_error("Invalid value in \"operating_mode_map\" parameter for " +
+                                 get_display_name(*context_) + ": " + error.what());
       }
     }
   }
 
-  virtual ~DynamixelActuator() {
+  virtual ~DynamixelActuatorDriver() {
     // finalize the present mode
     switch_operating_modes(/* new_mode = */ nullptr);
   }
@@ -103,9 +102,8 @@ public:
       return hi::return_type::OK;
     } else { // active_bound_ifaces.size() >= 2
       LHD_ERROR("DynamixelActuator::prepare_command_mode_switch(): "
-                "Reject mode switching of \"%s\" actuator "
-                "because %zd bound interfaces are about to be active",
-                context_->name.c_str(), active_bound_ifaces.size());
+                "Reject mode switching of %s because %zd bound interfaces are about to be active",
+                get_display_name(*context_).c_str(), active_bound_ifaces.size());
       return hi::return_type::ERROR;
     }
   }
@@ -115,9 +113,8 @@ public:
     const std::vector<std::size_t> active_bound_ifaces = active_interfaces.find(bound_interfaces_);
     if (active_bound_ifaces.size() >= 2) {
       LHD_ERROR("DynamixelActuator::perform_command_mode_switch(): "
-                "Could not switch mode of \"%s\" actuator "
-                "because %zd bound interfaces are active",
-                context_->name.c_str(), bound_interfaces_.size());
+                "Could not switch mode of %s because %zd bound interfaces are active",
+                get_display_name(*context_).c_str(), bound_interfaces_.size());
       return hi::return_type::ERROR;
     }
 
@@ -163,7 +160,8 @@ private:
     } else if (mode_str == "velocity") {
       return std::make_shared<VelocityMode>(context_);
     } else {
-      throw std::runtime_error("Unknown operating mode name \"" + mode_str + "\"");
+      throw std::runtime_error("Unknown operating mode name \"" + mode_str + "\" for " +
+                               get_display_name(*context_));
     }
   }
 
@@ -174,17 +172,15 @@ private:
     }
     // stop present mode
     if (present_mode_) {
-      LHD_INFO("DynamixelActuator::switch_operating_modes(): "
-               "Stopping \"%s\" operating mode for \"%s\" actuator",
-               present_mode_->get_name().c_str(), context_->name.c_str());
+      LHD_INFO("DynamixelActuator::switch_operating_modes(): Stopping \"%s\" operating mode for %s",
+               present_mode_->get_name().c_str(), get_display_name(*context_).c_str());
       present_mode_->stopping();
       present_mode_.reset();
     }
     // start new mode
     if (new_mode) {
-      LHD_INFO("DynamixelActuator::switch_operating_modes(): "
-               "Starting \"%s\" operating mode for \"%s\" actuator",
-               new_mode->get_name().c_str(), context_->name.c_str());
+      LHD_INFO("DynamixelActuator::switch_operating_modes(): Starting \"%s\" operating mode for %s",
+               new_mode->get_name().c_str(), get_display_name(*context_).c_str());
       new_mode->starting();
       present_mode_ = new_mode;
     }
