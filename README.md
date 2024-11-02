@@ -49,7 +49,7 @@ ___<layer_name>.actuators.<actuator_name>.operating_mode_map___ (map, required)
 </param>
 ```
 
-#### <u>Example</u>
+## Example
 see [examples](examples)
 
 ## Tips
