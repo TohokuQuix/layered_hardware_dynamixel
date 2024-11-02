@@ -29,7 +29,7 @@ ___<layer_name>.actuators.<actuator_name>.torque_constant___ (double, required)
 
 ___<layer_name>.actuators.<actuator_name>.operating_mode_map___ (map, required)
 * map to actuator's operating mode names from associated interface names (typically joint interfaces)
-* possible operating mode names are `clear_multi_turn`, `current_based_position`, `current`, `extended_position`, `reboot`, `torque_disable`, & `velocity`
+* possible operating mode names are 'clear_multi_turn', 'current_based_position', 'current', 'extended_position', 'reboot', 'torque_disable', & 'velocity'
 
 #### Example of parameter description
 ```xml
