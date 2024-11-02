@@ -5,7 +5,7 @@ A ros2_control layer implementation for ROBOTIS Dynamixel actuators. See [layere
 ### layered_hardware_dynamixel/DynamixelActuatorLayer
 * sends commands to ROBOTIS Dynamixel actuators within `write()` function
 * fetches states of actuators within `read()` function
-* switches mock actuators' operating modes when controllers using associated interfaces activate within `perform_command_mode_swtich()` function
+* switches actuators' operating modes within `perform_command_mode_swtich()` function when controllers using associated interfaces activate
 
 #### Hardware parameters
 ___<layer_name>___ (yaml, required)
