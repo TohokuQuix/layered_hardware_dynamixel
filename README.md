@@ -32,7 +32,7 @@ ___<layer_name>.actuators.<actuator_name>.operating_mode_map___ (map, required)
 * possible operating mode names are 'clear_multi_turn', 'current_based_position', 'current', 'extended_position', 'reboot', 'torque_disable', & 'velocity'
 
 #### Example of parameter description
-```xml
+```yaml
 <param name="example_dynamixel_actuator_layer">
     serial_interface: /dev/serial/by-id/...
     baudrate: 1000000
