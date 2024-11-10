@@ -12,11 +12,11 @@
 #include <hardware_interface/hardware_info.hpp>
 #include <hardware_interface/types/hardware_interface_return_values.hpp> // for hi::return_type
 #include <layered_hardware/layer_interface.hpp>
+#include <layered_hardware/logging_utils.hpp>
 #include <layered_hardware/merge_utils.hpp>
 #include <layered_hardware/string_registry.hpp>
 #include <layered_hardware_dynamixel/common_namespaces.hpp>
 #include <layered_hardware_dynamixel/dynamixel_actuator_driver.hpp>
-#include <layered_hardware_dynamixel/logging_utils.hpp>
 #include <rclcpp/duration.hpp>
 #include <rclcpp/time.hpp>
 
@@ -38,8 +38,7 @@ public:
     // find parameter group for this layer
     const auto params_it = hardware_info.hardware_parameters.find(layer_name);
     if (params_it == hardware_info.hardware_parameters.end()) {
-      LHD_ERROR("DynamixelActuatorLayer::on_init(): \"%s\" parameter is missing",
-                layer_name.c_str());
+      lh::lh_error("DynamixelActuatorLayer::on_init(): \"%s\" parameter is missing", layer_name);
       return CallbackReturn::ERROR;
     }
 
@@ -57,16 +56,16 @@ public:
         ator_params.emplace_back(name_param_pair.second);
       }
     } catch (const YAML::Exception &error) {
-      LHD_ERROR("DynamixelActuatorLayer::on_init(): %s (on parsing \"%s\" parameter)", //
-                error.what(), layer_name.c_str());
+      lh::lh_error("DynamixelActuatorLayer::on_init(): %s (on parsing \"%s\" parameter)", //
+                   error, layer_name);
       return CallbackReturn::ERROR;
     }
 
     // open USB serial device
     const auto dxl_wb = std::make_shared<DynamixelWorkbench>();
     if (!dxl_wb->init(serial_iface.c_str(), baudrate)) {
-      LHD_ERROR("DynamixelActuatorLayer::on_init(): Failed to open DynamielWorkbench (%s, %d)",
-                serial_iface.c_str(), baudrate);
+      lh::lh_error("DynamixelActuatorLayer::on_init(): Failed to open DynamielWorkbench (%s, %d)",
+                   serial_iface, baudrate);
       return CallbackReturn::ERROR;
     }
 
@@ -75,12 +74,13 @@ public:
       try {
         drivers_.emplace_back(new DynamixelActuatorDriver(ator_names[i], ator_params[i], dxl_wb));
       } catch (const std::runtime_error &error) {
-        LHD_ERROR("DynamixelActuatorLayer::on_init(): Failed to create driver for \"%s\" actuator",
-                  ator_names[i].c_str());
+        lh::lh_error(
+            "DynamixelActuatorLayer::on_init(): Failed to create driver for \"%s\" actuator",
+            ator_names[i]);
         return CallbackReturn::ERROR;
       }
-      LHD_INFO("DynamixelActuatorLayer::on_init(): Initialized the actuator \"%s\"",
-               ator_names[i].c_str());
+      lh::lh_info("DynamixelActuatorLayer::on_init(): Initialized the actuator \"%s\"",
+                  ator_names[i]);
     }
 
     return CallbackReturn::SUCCESS;
