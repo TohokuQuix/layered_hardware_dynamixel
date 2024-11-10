@@ -5,8 +5,8 @@
 #include <memory>
 #include <string>
 
-#include <layered_hardware/logging_utils.hpp>
 #include <layered_hardware_dynamixel/dynamixel_actuator_context.hpp>
+#include <layered_hardware_dynamixel/logging_utils.hpp>
 #include <rclcpp/duration.hpp>
 #include <rclcpp/time.hpp>
 
@@ -22,9 +22,8 @@ namespace layered_hardware_dynamixel {
 static inline bool ping(const std::shared_ptr<DynamixelActuatorContext> &context) {
   const char *log = nullptr;
   if (!context->dxl_wb->ping(context->id, &log)) {
-    lh::lh_error("ping(): Failed to ping to %s: %s", //
-                 get_display_name(*context),
-                 (log ? log : "No log from DynamixelWorkbench::ping()"));
+    lhd_error("ping(): Failed to ping to %s: %s", //
+              get_display_name(*context), (log ? log : "No log from DynamixelWorkbench::ping()"));
     return false;
   }
   return true;
@@ -36,8 +35,8 @@ static inline bool ping_for(const std::shared_ptr<DynamixelActuatorContext> &con
   const rclcpp::Time timeout_abs = clock.now() + timeout;
   while (true) {
     if (clock.now() > timeout_abs) {
-      lh::lh_error("ping_for(): No ping response from %s for %f s", //
-                   get_display_name(*context), timeout.seconds());
+      lhd_error("ping_for(): No ping response from %s for %f s", //
+                get_display_name(*context), timeout.seconds());
       return false;
     }
     if (ping(context)) {
@@ -50,9 +49,8 @@ static inline bool ping_for(const std::shared_ptr<DynamixelActuatorContext> &con
 static inline bool reboot(const std::shared_ptr<DynamixelActuatorContext> &context) {
   const char *log = nullptr;
   if (!context->dxl_wb->reboot(context->id, &log)) {
-    lh::lh_error("reboot(): Failed to reboot %s: %s", //
-                 get_display_name(*context),
-                 (log ? log : "No log from DynamixelWorkbench::reboot()"));
+    lhd_error("reboot(): Failed to reboot %s: %s", //
+              get_display_name(*context), (log ? log : "No log from DynamixelWorkbench::reboot()"));
     return false;
   }
   return true;
@@ -70,9 +68,9 @@ static inline bool read_item(const std::shared_ptr<DynamixelActuatorContext> &co
                              const std::string &item, std::int32_t *value) {
   const char *log = nullptr;
   if (!context->dxl_wb->itemRead(context->id, item.c_str(), value, &log)) {
-    lh::lh_error("read_item(): Failed to read control table item \"%s\" of %s: %s", //
-                 item, get_display_name(*context),
-                 (log ? log : "No log from DynamixelWorkbench::itemRead()"));
+    lhd_error("read_item(): Failed to read control table item \"%s\" of %s: %s", //
+              item, get_display_name(*context),
+              (log ? log : "No log from DynamixelWorkbench::itemRead()"));
     return false;
   }
   return true;
@@ -82,9 +80,9 @@ static inline bool read_position(const std::shared_ptr<DynamixelActuatorContext>
   float rad;
   const char *log = nullptr;
   if (!context->dxl_wb->getRadian(context->id, &rad, &log)) {
-    lh::lh_error("read_position(): Failed to read position from %s: %s", //
-                 get_display_name(*context),
-                 (log ? log : "No log from DynamixelWorkbench::getRadian()"));
+    lhd_error("read_position(): Failed to read position from %s: %s", //
+              get_display_name(*context),
+              (log ? log : "No log from DynamixelWorkbench::getRadian()"));
     return false;
   }
   context->pos = rad;
@@ -135,24 +133,24 @@ enable_operating_mode(const std::shared_ptr<DynamixelActuatorContext> &context,
   // disable torque to make the actuator ready to change operating modes
   log = nullptr;
   if (!context->dxl_wb->torqueOff(context->id, &log)) {
-    lh::lh_error("enable_operating_mode(): Failed to disable torque of %s: %s",
-                 get_display_name(*context),
-                 (log ? log : "No log from DynamixelWorkbench::torqueOff()"));
+    lhd_error("enable_operating_mode(): Failed to disable torque of %s: %s",
+              get_display_name(*context),
+              (log ? log : "No log from DynamixelWorkbench::torqueOff()"));
     return false;
   }
   // change operating modes
   log = nullptr;
   if (!(context->dxl_wb.get()->*set_func)(context->id, &log)) {
-    lh::lh_error("enable_operating_mode(): Failed to set operating mode of %s: %s",
-                 get_display_name(*context), (log ? log : "No log from DynamixelWorkbench"));
+    lhd_error("enable_operating_mode(): Failed to set operating mode of %s: %s",
+              get_display_name(*context), (log ? log : "No log from DynamixelWorkbench"));
     return false;
   }
   // activate new operating mode by enabling torque
   log = nullptr;
   if (!context->dxl_wb->torqueOn(context->id, &log)) {
-    lh::lh_error("enable_operating_mode(): Failed to enable torque of %s: %s",
-                 get_display_name(*context),
-                 (log ? log : "No log from DynamixelWorkbench::torqueOn()"));
+    lhd_error("enable_operating_mode(): Failed to enable torque of %s: %s",
+              get_display_name(*context),
+              (log ? log : "No log from DynamixelWorkbench::torqueOn()"));
     return false;
   }
   return true;
@@ -161,9 +159,9 @@ enable_operating_mode(const std::shared_ptr<DynamixelActuatorContext> &context,
 static inline bool torque_off(const std::shared_ptr<DynamixelActuatorContext> &context) {
   const char *log = nullptr;
   if (!context->dxl_wb->torqueOff(context->id, &log)) {
-    lh::lh_error("torque_off(): Failed to disable torque of %s: %s", //
-                 get_display_name(*context),
-                 (log ? log : "No log from DynamixelWorkbench::torqueOff()"));
+    lhd_error("torque_off(): Failed to disable torque of %s: %s", //
+              get_display_name(*context),
+              (log ? log : "No log from DynamixelWorkbench::torqueOff()"));
     return false;
   }
   return true;
@@ -172,9 +170,9 @@ static inline bool torque_off(const std::shared_ptr<DynamixelActuatorContext> &c
 static inline bool clear_multi_turn(const std::shared_ptr<DynamixelActuatorContext> &context) {
   const char *log = nullptr;
   if (!context->dxl_wb->clearMultiTurn(context->id, &log)) {
-    lh::lh_error("clear_multi_turn(): Failed to clear multi turn count of %s: %s",
-                 get_display_name(*context),
-                 (log ? log : "No log from DynamixelWorkbench::clearMultiTurn()"));
+    lhd_error("clear_multi_turn(): Failed to clear multi turn count of %s: %s",
+              get_display_name(*context),
+              (log ? log : "No log from DynamixelWorkbench::clearMultiTurn()"));
     return false;
   }
   return true;
@@ -184,9 +182,9 @@ static inline bool write_item(const std::shared_ptr<DynamixelActuatorContext> &c
                               const std::string &item, const std::int32_t value) {
   const char *log = nullptr;
   if (!context->dxl_wb->itemWrite(context->id, item.c_str(), value, &log)) {
-    lh::lh_error("write_item(): Failed to set control table item \"%s\" of %s: %s", //
-                 item, get_display_name(*context),
-                 (log ? log : "No log from DynamixelWorkbench::itemWrite()"));
+    lhd_error("write_item(): Failed to set control table item \"%s\" of %s: %s", //
+              item, get_display_name(*context),
+              (log ? log : "No log from DynamixelWorkbench::itemWrite()"));
     return false;
   }
   return true;
@@ -196,9 +194,9 @@ static inline bool
 write_position_command(const std::shared_ptr<DynamixelActuatorContext> &context) {
   const char *log = nullptr;
   if (!context->dxl_wb->goalPosition(context->id, static_cast<float>(context->pos_cmd), &log)) {
-    lh::lh_error("write_position_command(): Failed to set goal position of %s: %s",
-                 get_display_name(*context),
-                 (log ? log : "No log from DynamixelWorkbench::goalPosition()"));
+    lhd_error("write_position_command(): Failed to set goal position of %s: %s",
+              get_display_name(*context),
+              (log ? log : "No log from DynamixelWorkbench::goalPosition()"));
     return false;
   }
   return true;
@@ -208,9 +206,9 @@ static inline bool
 write_velocity_command(const std::shared_ptr<DynamixelActuatorContext> &context) {
   const char *log = nullptr;
   if (!context->dxl_wb->goalVelocity(context->id, static_cast<float>(context->vel_cmd), &log)) {
-    lh::lh_error("write_velocity_command(): Failed to set goal velocity of %s: %s",
-                 get_display_name(*context),
-                 (log ? log : "No log from DynamixelWorkbench::goalVelocity()"));
+    lhd_error("write_velocity_command(): Failed to set goal velocity of %s: %s",
+              get_display_name(*context),
+              (log ? log : "No log from DynamixelWorkbench::goalVelocity()"));
     return false;
   }
   return true;

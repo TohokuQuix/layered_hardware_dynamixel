@@ -10,7 +10,6 @@
 #include <hardware_interface/handle.hpp> // for hi::{State,Command}Interface
 #include <hardware_interface/types/hardware_interface_return_values.hpp> // for hi::return_type
 #include <hardware_interface/types/hardware_interface_type_values.hpp>
-#include <layered_hardware/logging_utils.hpp>
 #include <layered_hardware/string_registry.hpp>
 #include <layered_hardware_dynamixel/clear_multi_turn_mode.hpp>
 #include <layered_hardware_dynamixel/common_namespaces.hpp>
@@ -19,6 +18,7 @@
 #include <layered_hardware_dynamixel/dynamixel_actuator_context.hpp>
 #include <layered_hardware_dynamixel/dynamixel_workbench_utils.hpp>
 #include <layered_hardware_dynamixel/extended_position_mode.hpp>
+#include <layered_hardware_dynamixel/logging_utils.hpp>
 #include <layered_hardware_dynamixel/operating_mode_interface.hpp>
 #include <layered_hardware_dynamixel/position_mode.hpp>
 #include <layered_hardware_dynamixel/reboot_mode.hpp>
@@ -101,10 +101,9 @@ public:
     if (active_bound_ifaces.size() <= 1) {
       return hi::return_type::OK;
     } else { // active_bound_ifaces.size() >= 2
-      lh::lh_error(
-          "DynamixelActuatorDriver::prepare_command_mode_switch(): "
-          "Reject mode switching of %s because %zd bound interfaces are about to be active",
-          get_display_name(*context_), active_bound_ifaces.size());
+      lhd_error("DynamixelActuatorDriver::prepare_command_mode_switch(): "
+                "Reject mode switching of %s because %zd bound interfaces are about to be active",
+                get_display_name(*context_), active_bound_ifaces.size());
       return hi::return_type::ERROR;
     }
   }
@@ -113,9 +112,9 @@ public:
     // check how many interfaces associated with actuator command mode are active
     const std::vector<std::size_t> active_bound_ifaces = active_interfaces.find(bound_interfaces_);
     if (active_bound_ifaces.size() >= 2) {
-      lh::lh_error("DynamixelActuatorDriver::perform_command_mode_switch(): "
-                   "Could not switch mode of %s because %zd bound interfaces are active",
-                   get_display_name(*context_), bound_interfaces_.size());
+      lhd_error("DynamixelActuatorDriver::perform_command_mode_switch(): "
+                "Could not switch mode of %s because %zd bound interfaces are active",
+                get_display_name(*context_), bound_interfaces_.size());
       return hi::return_type::ERROR;
     }
 
@@ -173,17 +172,17 @@ private:
     }
     // stop present mode
     if (present_mode_) {
-      lh::lh_info("DynamixelActuatorDriver::switch_operating_modes(): "
-                  "Stopping \"%s\" operating mode for %s",
-                  present_mode_->get_name(), get_display_name(*context_));
+      lhd_info("DynamixelActuatorDriver::switch_operating_modes(): "
+               "Stopping \"%s\" operating mode for %s",
+               present_mode_->get_name(), get_display_name(*context_));
       present_mode_->stopping();
       present_mode_.reset();
     }
     // start new mode
     if (new_mode) {
-      lh::lh_info("DynamixelActuatorDriver::switch_operating_modes(): "
-                  "Starting \"%s\" operating mode for %s",
-                  new_mode->get_name(), get_display_name(*context_));
+      lhd_info("DynamixelActuatorDriver::switch_operating_modes(): "
+               "Starting \"%s\" operating mode for %s",
+               new_mode->get_name(), get_display_name(*context_));
       new_mode->starting();
       present_mode_ = new_mode;
     }
