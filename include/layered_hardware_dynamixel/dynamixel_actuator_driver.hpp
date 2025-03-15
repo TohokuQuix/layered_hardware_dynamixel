@@ -22,6 +22,7 @@
 #include <layered_hardware_dynamixel/operating_mode_interface.hpp>
 #include <layered_hardware_dynamixel/position_mode.hpp>
 #include <layered_hardware_dynamixel/reboot_mode.hpp>
+#include <layered_hardware_dynamixel/torque_mode.hpp>
 #include <layered_hardware_dynamixel/torque_disable_mode.hpp>
 #include <layered_hardware_dynamixel/velocity_mode.hpp>
 #include <rclcpp/duration.hpp>
@@ -155,6 +156,8 @@ private:
       return std::make_shared<PositionMode>(context_);
     } else if (mode_str == "reboot") {
       return std::make_shared<RebootMode>(context_);
+    } else if (mode_str == "torque") {
+      return std::make_shared<TorqueMode>(context_);
     } else if (mode_str == "torque_disable") {
       return std::make_shared<TorqueDisableMode>(context_);
     } else if (mode_str == "velocity") {
