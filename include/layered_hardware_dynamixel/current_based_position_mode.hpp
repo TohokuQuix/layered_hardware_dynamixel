@@ -16,12 +16,15 @@ namespace layered_hardware_dynamixel {
 
 class CurrentBasedPositionMode : public OperatingModeInterface {
 public:
-  CurrentBasedPositionMode(const std::shared_ptr<DynamixelActuatorContext> &context)
-      : OperatingModeInterface("current_based_position", context) {}
+  CurrentBasedPositionMode(const std::shared_ptr<DynamixelActuatorContext> &context,
+                           const std::map<std::string, std::int32_t> &item_map)
+      : OperatingModeInterface("current_based_position", context), item_map_(item_map) {}
 
   virtual void starting() override {
     // switch to current-based position mode
     enable_operating_mode(context_, &DynamixelWorkbench::setCurrentBasedPositionControlMode);
+
+    write_items(context_, item_map_);
 
     // use the present position as the initial position command
     read_all_states(context_);
@@ -86,6 +89,7 @@ public:
   virtual void stopping() override { torque_off(context_); }
 
 private:
+  const std::map<std::string, std::int32_t> item_map_;
   double prev_pos_cmd_, prev_vel_cmd_, prev_eff_cmd_;
   std::optional<double> cached_pos_;
 };

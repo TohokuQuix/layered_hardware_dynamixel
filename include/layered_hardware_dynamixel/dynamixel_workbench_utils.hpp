@@ -190,6 +190,17 @@ static inline bool write_item(const std::shared_ptr<DynamixelActuatorContext> &c
   return true;
 }
 
+static inline bool write_items(
+    const std::shared_ptr<DynamixelActuatorContext> &context,
+    const std::map<std::string, std::int32_t> &item_map) {
+  for (const auto &item : item_map) {
+    if (!write_item(context, item.first, item.second)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 static inline bool
 write_position_command(const std::shared_ptr<DynamixelActuatorContext> &context) {
   const char *log = nullptr;

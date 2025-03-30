@@ -15,12 +15,15 @@ namespace layered_hardware_dynamixel {
 
 class VelocityMode : public OperatingModeInterface {
 public:
-  VelocityMode(const std::shared_ptr<DynamixelActuatorContext> &context)
-      : OperatingModeInterface("velocity", context) {}
+  VelocityMode(const std::shared_ptr<DynamixelActuatorContext> &context,
+               const std::map< std::string, std::int32_t > &item_map)
+      : OperatingModeInterface("velocity", context), item_map_(item_map) {}
 
   virtual void starting() override {
     // switch to velocity mode
     enable_operating_mode(context_, &DynamixelWorkbench::setVelocityControlMode);
+
+    write_items(context_, item_map_);
 
     // set reasonable initial command
     context_->vel_cmd = 0.;
@@ -41,6 +44,7 @@ public:
   virtual void stopping() override { torque_off(context_); }
 
 private:
+  const std::map<std::string, std::int32_t> item_map_;
   double prev_vel_cmd_;
 };
 } // namespace layered_hardware_dynamixel
