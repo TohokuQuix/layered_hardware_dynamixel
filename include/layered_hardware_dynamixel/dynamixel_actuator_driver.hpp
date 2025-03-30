@@ -179,7 +179,7 @@ private:
     } else if (mode_str == "torque") {
       return std::make_shared<TorqueMode>(context_);
     } else if (mode_str == "torque_disable") {
-      return std::make_shared<TorqueDisableMode>(context_);
+      return std::make_shared<TorqueDisableMode>(context_, item_map);
     } else if (mode_str == "velocity") {
       return std::make_shared<VelocityMode>(context_, item_map);
     } else {
