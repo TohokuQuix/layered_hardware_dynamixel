@@ -150,11 +150,11 @@ private:
                                   std::map<std::string, std::int32_t> &item_map) {
     try {
       if (!node || !node[key]) {
-        lhd_error("get_int32_map_param(): Parameter \"%s\" not found", key);
+        lhd_info("get_int32_map_param(): Parameter \"%s\" not found. passing..", key);
         return false;
       }
-      for (const auto &item : node) {
-        item_map[key] = item.second.as<std::int32_t>();
+      for (const auto &item : node[key]) {
+        item_map[item.first.as<std::string>()] = item.second.as<std::int32_t>();
       }
     } catch (const YAML::Exception &error) {
       lhd_error("get_int32_map_param(): Failed to parse parameter: %s", error.what());
