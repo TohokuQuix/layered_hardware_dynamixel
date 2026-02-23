@@ -35,14 +35,18 @@ namespace layered_hardware_dynamixel {
 class DynamixelActuatorDriver {
 public:
   DynamixelActuatorDriver(const std::string &name, const YAML::Node &params,
-                          const std::shared_ptr<DynamixelWorkbench> &dxl_wb) {
+                          const std::shared_ptr<DynamixelWorkbench> &dxl_wb,
+                          const bool default_torque_off_on_stop) {
     // parse parameters for this actuator
     std::uint8_t id;
     double torque_constant;
+    bool torque_off_on_stop = default_torque_off_on_stop;
     std::vector<std::string> mapped_mode_names;
     try {
       id = static_cast<std::uint8_t>(params["id"].as<int>());
       torque_constant = params["torque_constant"].as<double>();
+      torque_off_on_stop =
+          params["torque_off_on_stop"].as<bool>(default_torque_off_on_stop);
       for (const auto &iface_mode_name_pair : params["operating_mode_map"]) {
         bound_interfaces_.emplace_back(iface_mode_name_pair.first.as<std::string>());
         mapped_mode_names.emplace_back(iface_mode_name_pair.second.as<std::string>());
@@ -53,7 +57,8 @@ public:
     }
 
     // allocate context
-    context_.reset(new DynamixelActuatorContext{name, dxl_wb, id, torque_constant});
+    context_.reset(
+        new DynamixelActuatorContext{name, dxl_wb, id, torque_constant, torque_off_on_stop});
 
     // find dynamixel actuator by id
     if (!ping(context_)) {

@@ -43,7 +43,11 @@ public:
     }
   }
 
-  virtual void stopping() override { torque_off(context_); }
+  virtual void stopping() override {
+    if (context_->torque_off_on_stop) {
+      torque_off(context_);
+    }
+  }
 
 private:
   const std::map<std::string, std::int32_t> item_map_;

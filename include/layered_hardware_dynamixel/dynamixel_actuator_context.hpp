@@ -18,6 +18,7 @@ struct DynamixelActuatorContext {
 
   // params
   const double torque_constant;
+  const bool torque_off_on_stop;
 
   // states
   double pos = std::numeric_limits<double>::quiet_NaN(),

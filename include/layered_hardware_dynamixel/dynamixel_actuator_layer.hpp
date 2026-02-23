@@ -48,12 +48,14 @@ public:
     // parse parameters for this layer as yaml
     std::string serial_iface;
     std::uint32_t baudrate;
+    bool torque_off_on_stop = true;
     std::vector<std::string> ator_names;
     std::vector<YAML::Node> ator_params;
     try {
       const YAML::Node params = YAML::Load(params_it->second);
       serial_iface = params["serial_interface"].as<std::string>("/dev/ttyUSB0");
       baudrate = params["baudrate"].as<int>(115200);
+      torque_off_on_stop = params["torque_off_on_stop"].as<bool>(true);
       for (const auto &name_param_pair : params["actuators"]) {
         ator_names.emplace_back(name_param_pair.first.as<std::string>());
         ator_params.emplace_back(name_param_pair.second);
@@ -71,11 +73,14 @@ public:
                 serial_iface, baudrate);
       return CallbackReturn::ERROR;
     }
+    lhd_info("DynamixelActuatorLayer::on_init(): torque_off_on_stop=%s",
+             torque_off_on_stop ? "true" : "false");
 
     // init actuators with param "actuators/<actuator_name>"
     for (std::size_t i = 0; i < ator_names.size(); ++i) {
       try {
-        drivers_.emplace_back(new DynamixelActuatorDriver(ator_names[i], ator_params[i], dxl_wb));
+        drivers_.emplace_back(
+            new DynamixelActuatorDriver(ator_names[i], ator_params[i], dxl_wb, torque_off_on_stop));
       } catch (const std::runtime_error &error) {
         lhd_error("DynamixelActuatorLayer::on_init(): Failed to create driver for \"%s\" actuator",
                   ator_names[i]);
