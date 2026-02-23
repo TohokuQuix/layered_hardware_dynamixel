@@ -22,7 +22,7 @@ public:
 
   virtual void starting() override {
     // switch to extended-position mode & torque enable
-    enable_operating_mode(context_, &DynamixelWorkbench::setExtendedPositionControlMode);
+    enable_operating_mode(context_, &DynamixelWorkbench::setExtendedPositionControlMode, 4);
 
     write_items(context_, item_map_);
 

@@ -21,7 +21,7 @@ public:
 
   virtual void starting() override {
     // switch to current mode
-    enable_operating_mode(context_, &DynamixelWorkbench::setCurrentControlMode);
+    enable_operating_mode(context_, &DynamixelWorkbench::setCurrentControlMode, 0);
 
     write_items(context_, item_map_);
 

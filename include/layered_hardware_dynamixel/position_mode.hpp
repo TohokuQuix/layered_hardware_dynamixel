@@ -21,7 +21,7 @@ public:
 
   virtual void starting() override {
     // switch to position mode & torque enable
-    enable_operating_mode(context_, &DynamixelWorkbench::setPositionControlMode);
+    enable_operating_mode(context_, &DynamixelWorkbench::setPositionControlMode, 3);
 
     write_items(context_, item_map_);
 

@@ -21,7 +21,7 @@ public:
 
   virtual void starting() override {
     // switch to velocity mode
-    enable_operating_mode(context_, &DynamixelWorkbench::setVelocityControlMode);
+    enable_operating_mode(context_, &DynamixelWorkbench::setVelocityControlMode, 1);
 
     write_items(context_, item_map_);
 

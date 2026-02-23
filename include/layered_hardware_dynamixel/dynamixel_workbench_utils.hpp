@@ -4,6 +4,8 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <thread>
+#include <chrono>
 
 #include <layered_hardware_dynamixel/dynamixel_actuator_context.hpp>
 #include <layered_hardware_dynamixel/logging_utils.hpp>
@@ -128,7 +130,32 @@ static inline bool read_all_states(const std::shared_ptr<DynamixelActuatorContex
 
 static inline bool
 enable_operating_mode(const std::shared_ptr<DynamixelActuatorContext> &context,
-                      bool (DynamixelWorkbench::*const set_func)(std::uint8_t, const char **)) {
+                      bool (DynamixelWorkbench::*const set_func)(std::uint8_t, const char **),
+                      const std::int32_t target_operating_mode) {
+  std::int32_t operating_mode = -1;
+  std::int32_t torque_enable = -1;
+  const bool has_mode = read_item(context, "Operating_Mode", &operating_mode);
+  const bool has_torque = read_item(context, "Torque_Enable", &torque_enable);
+
+  if (has_mode && has_torque && operating_mode == target_operating_mode) {
+    // Skip unnecessary mode switches to avoid transient failures at startup.
+    if (torque_enable != 0) {
+      return true;
+    }
+    const char *log = nullptr;
+    for (int attempt = 0; attempt < 3; ++attempt) {
+      log = nullptr;
+      if (context->dxl_wb->torqueOn(context->id, &log)) {
+        return true;
+      }
+      std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    }
+    lhd_error("enable_operating_mode(): Failed to enable torque of %s in existing mode: %s",
+              get_display_name(*context),
+              (log ? log : "No log from DynamixelWorkbench::torqueOn()"));
+    return false;
+  }
+
   const char *log;
   // disable torque to make the actuator ready to change operating modes
   log = nullptr;
@@ -146,14 +173,17 @@ enable_operating_mode(const std::shared_ptr<DynamixelActuatorContext> &context,
     return false;
   }
   // activate new operating mode by enabling torque
-  log = nullptr;
-  if (!context->dxl_wb->torqueOn(context->id, &log)) {
-    lhd_error("enable_operating_mode(): Failed to enable torque of %s: %s",
-              get_display_name(*context),
-              (log ? log : "No log from DynamixelWorkbench::torqueOn()"));
-    return false;
+  for (int attempt = 0; attempt < 3; ++attempt) {
+    log = nullptr;
+    if (context->dxl_wb->torqueOn(context->id, &log)) {
+      return true;
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
   }
-  return true;
+  lhd_error("enable_operating_mode(): Failed to enable torque of %s: %s",
+            get_display_name(*context),
+            (log ? log : "No log from DynamixelWorkbench::torqueOn()"));
+  return false;
 }
 
 static inline bool torque_off(const std::shared_ptr<DynamixelActuatorContext> &context) {

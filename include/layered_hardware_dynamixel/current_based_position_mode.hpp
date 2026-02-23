@@ -22,7 +22,7 @@ public:
 
   virtual void starting() override {
     // switch to current-based position mode
-    enable_operating_mode(context_, &DynamixelWorkbench::setCurrentBasedPositionControlMode);
+    enable_operating_mode(context_, &DynamixelWorkbench::setCurrentBasedPositionControlMode, 5);
 
     write_items(context_, item_map_);
 
