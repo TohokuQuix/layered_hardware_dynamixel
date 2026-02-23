@@ -31,7 +31,9 @@ public:
   }
 
   virtual void read(const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/) override {
-    read_all_states(context_);
+    if (!context_->use_sync_read) {
+      read_all_states(context_);
+    }
   }
 
   virtual void write(const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/) override {

@@ -133,8 +133,19 @@ public:
   hi::return_type read(const rclcpp::Time &time, const rclcpp::Duration &period) {
     if (present_mode_) {
       present_mode_->read(time, period);
+    } else {
+      // Keep one consistent read path regardless of controller activation.
+      // When SyncRead already updated states in layer->read(), don't overwrite
+      // with per-servo reads here.
+      if (!context_->use_sync_read) {
+        if (!read_all_states(context_)) {
+          lhd_error("DynamixelActuatorDriver::read(): Failed to read state from %s",
+                    get_display_name(*context_));
+          return hi::return_type::ERROR;
+        }
+      }
     }
-    return hi::return_type::OK; // TODO: return result of read
+    return hi::return_type::OK;
   }
 
   hi::return_type write(const rclcpp::Time &time, const rclcpp::Duration &period) {
@@ -143,6 +154,8 @@ public:
     }
     return hi::return_type::OK; // TODO: return result of write
   }
+
+  const std::shared_ptr<DynamixelActuatorContext> &get_context() const { return context_; }
 
 private:
   static bool get_int32_map_param(const YAML::Node &node,
