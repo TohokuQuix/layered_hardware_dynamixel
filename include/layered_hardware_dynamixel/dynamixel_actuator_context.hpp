@@ -23,6 +23,7 @@ struct DynamixelActuatorContext {
   double pos = std::numeric_limits<double>::quiet_NaN(),
          vel = std::numeric_limits<double>::quiet_NaN(),
          eff = std::numeric_limits<double>::quiet_NaN();
+  bool use_sync_read = false;
 
   // commands
   double pos_cmd = std::numeric_limits<double>::quiet_NaN(),
