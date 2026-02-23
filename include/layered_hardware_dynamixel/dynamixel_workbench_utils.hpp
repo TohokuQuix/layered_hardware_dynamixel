@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 
 #include <layered_hardware_dynamixel/dynamixel_actuator_context.hpp>
@@ -129,6 +130,45 @@ static inline bool read_all_states(const std::shared_ptr<DynamixelActuatorContex
 static inline bool
 enable_operating_mode(const std::shared_ptr<DynamixelActuatorContext> &context,
                       bool (DynamixelWorkbench::*const set_func)(std::uint8_t, const char **)) {
+  auto expected_mode = [&]() -> std::optional<std::int32_t> {
+    if (set_func == &DynamixelWorkbench::setCurrentControlMode) {
+      return 0;
+    }
+    if (set_func == &DynamixelWorkbench::setVelocityControlMode) {
+      return 1;
+    }
+    if (set_func == &DynamixelWorkbench::setPositionControlMode) {
+      return 3;
+    }
+    if (set_func == &DynamixelWorkbench::setExtendedPositionControlMode) {
+      return 4;
+    }
+    if (set_func == &DynamixelWorkbench::setCurrentBasedPositionControlMode) {
+      return 5;
+    }
+    return std::nullopt;
+  }();
+
+  // If already in desired mode with torque ON, avoid unnecessary torque cycle.
+  std::int32_t torque_enable = -1;
+  const bool has_torque_enable = has_item(context, "Torque_Enable");
+  const bool read_torque_enable = has_torque_enable && read_item(context, "Torque_Enable", &torque_enable);
+
+  std::int32_t operating_mode = -1;
+  const bool has_operating_mode = has_item(context, "Operating_Mode");
+  const bool read_operating_mode =
+      expected_mode.has_value() && has_operating_mode &&
+      read_item(context, "Operating_Mode", &operating_mode);
+
+  if (read_torque_enable && read_operating_mode && torque_enable == 1 &&
+      operating_mode == expected_mode.value()) {
+    lhd_info("enable_operating_mode(): Skip mode switch for %s (Operating_Mode=%d, Torque_Enable=%d)",
+             get_display_name(*context),
+             static_cast<int>(operating_mode),
+             static_cast<int>(torque_enable));
+    return true;
+  }
+
   const char *log;
   // disable torque to make the actuator ready to change operating modes
   log = nullptr;

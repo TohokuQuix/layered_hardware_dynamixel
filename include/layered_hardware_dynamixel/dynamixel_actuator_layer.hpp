@@ -29,6 +29,8 @@ namespace layered_hardware_dynamixel {
 
 class DynamixelActuatorLayer : public lh::LayerInterface {
 public:
+  virtual ~DynamixelActuatorLayer() override = default;
+
   virtual CallbackReturn on_init(const std::string &layer_name,
                                  const hi::HardwareInfo &hardware_info) override {
     // initialize the base class first
@@ -71,7 +73,6 @@ public:
                 serial_iface, baudrate);
       return CallbackReturn::ERROR;
     }
-
     // init actuators with param "actuators/<actuator_name>"
     for (std::size_t i = 0; i < ator_names.size(); ++i) {
       try {
