@@ -25,6 +25,7 @@ public:
     enable_operating_mode(context_, &DynamixelWorkbench::setExtendedPositionControlMode, 4);
 
     write_items(context_, item_map_);
+    log_applied_config(context_, "extended_position");
 
     // use the present position as the initial command
     read_all_states(context_);
@@ -48,8 +49,15 @@ public:
     const bool do_write_pos =
         (!std::isnan(context_->pos_cmd) && (context_->pos_cmd != prev_pos_cmd_));
     if (do_write_pos) {
-      write_position_command(context_);
-      prev_pos_cmd_ = context_->pos_cmd;
+      if (context_->use_sync_write) {
+        if (enqueue_position_command(context_)) {
+          prev_pos_cmd_ = context_->pos_cmd;
+        }
+      } else {
+        if (write_position_command(context_)) {
+          prev_pos_cmd_ = context_->pos_cmd;
+        }
+      }
     }
   }
 

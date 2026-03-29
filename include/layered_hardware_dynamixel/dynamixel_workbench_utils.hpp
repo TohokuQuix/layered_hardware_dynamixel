@@ -1,9 +1,12 @@
 #ifndef LAYERED_HARDWARE_DYNAMIXEL_DYNAMIXEL_WORKBENCH_UTILS_HPP
 #define LAYERED_HARDWARE_DYNAMIXEL_DYNAMIXEL_WORKBENCH_UTILS_HPP
 
+#include <cmath>
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <string>
+#include <vector>
 #include <thread>
 #include <chrono>
 
@@ -76,6 +79,87 @@ static inline bool read_item(const std::shared_ptr<DynamixelActuatorContext> &co
     return false;
   }
   return true;
+}
+
+static inline bool try_read_item(const std::shared_ptr<DynamixelActuatorContext> &context,
+                                 const std::string &item, std::int32_t *value) {
+  if (!has_item(context, item)) {
+    return false;
+  }
+  return read_item(context, item, value);
+}
+
+static inline void log_startup_config(const std::shared_ptr<DynamixelActuatorContext> &context) {
+  const std::vector<std::string> items = {
+      "Torque_Enable",
+      "Operating_Mode",
+      "Drive_Mode",
+      "Bus_Watchdog",
+      "PWM_Limit",
+      "Current_Limit",
+      "Velocity_Limit",
+      "Acceleration_Limit",
+      "Min_Position_Limit",
+      "Max_Position_Limit",
+      "Homing_Offset",
+      "Profile_Velocity",
+      "Profile_Acceleration",
+      "Goal_Current",
+      "Velocity_I_Gain",
+      "Velocity_P_Gain",
+      "Position_D_Gain",
+      "Position_I_Gain",
+      "Position_P_Gain",
+      "Feedforward_2nd_Gain",
+      "Feedforward_1st_Gain",
+  };
+  for (const auto &item : items) {
+    std::int32_t value = 0;
+    if (!try_read_item(context, item, &value)) {
+      const auto name = get_display_name(*context);
+      lhd_info("startup_config: %s %s=<unavailable>", name.c_str(), item.c_str());
+      continue;
+    }
+    const auto name = get_display_name(*context);
+    lhd_info("startup_config: %s %s=%d", name.c_str(), item.c_str(), value);
+  }
+}
+
+static inline void log_applied_config(const std::shared_ptr<DynamixelActuatorContext> &context,
+                                      const std::string &mode_name) {
+  const std::vector<std::string> items = {
+      "Torque_Enable",
+      "Operating_Mode",
+      "Drive_Mode",
+      "Bus_Watchdog",
+      "PWM_Limit",
+      "Current_Limit",
+      "Velocity_Limit",
+      "Acceleration_Limit",
+      "Min_Position_Limit",
+      "Max_Position_Limit",
+      "Homing_Offset",
+      "Profile_Velocity",
+      "Profile_Acceleration",
+      "Goal_Current",
+      "Velocity_I_Gain",
+      "Velocity_P_Gain",
+      "Position_D_Gain",
+      "Position_I_Gain",
+      "Position_P_Gain",
+      "Feedforward_2nd_Gain",
+      "Feedforward_1st_Gain",
+  };
+  for (const auto &item : items) {
+    std::int32_t value = 0;
+    const auto name = get_display_name(*context);
+    if (!try_read_item(context, item, &value)) {
+      lhd_info("applied_config[%s]: %s %s=<unavailable>", mode_name.c_str(), name.c_str(),
+               item.c_str());
+      continue;
+    }
+    lhd_info("applied_config[%s]: %s %s=%d", mode_name.c_str(), name.c_str(), item.c_str(), value);
+  }
 }
 
 static inline bool read_position(const std::shared_ptr<DynamixelActuatorContext> &context) {
@@ -233,13 +317,36 @@ static inline bool write_items(
 
 static inline bool
 write_position_command(const std::shared_ptr<DynamixelActuatorContext> &context) {
+  if (!std::isfinite(context->pos_cmd)) {
+    lhd_error("write_position_command(): Invalid goal position command for %s: pos_cmd=%f",
+              get_display_name(*context), context->pos_cmd);
+    return false;
+  }
   const char *log = nullptr;
   if (!context->dxl_wb->goalPosition(context->id, static_cast<float>(context->pos_cmd), &log)) {
-    lhd_error("write_position_command(): Failed to set goal position of %s: %s",
-              get_display_name(*context),
+    lhd_error("write_position_command(): Failed to set goal position of %s: pos_cmd=%f pos=%f (%s)",
+              get_display_name(*context), context->pos_cmd, context->pos,
               (log ? log : "No log from DynamixelWorkbench::goalPosition()"));
     return false;
   }
+
+  const auto now_tp = std::chrono::steady_clock::now();
+  context->last_pos_cmd_written = context->pos_cmd;
+  context->last_pos_cmd_write_tp = now_tp;
+  context->has_last_pos_cmd_write = true;
+  context->pos_cmd_pending = false;
+
+  return true;
+}
+
+static inline bool
+enqueue_position_command(const std::shared_ptr<DynamixelActuatorContext> &context) {
+  if (!std::isfinite(context->pos_cmd)) {
+    lhd_error("enqueue_position_command(): Invalid goal position command for %s: pos_cmd=%f",
+              get_display_name(*context), context->pos_cmd);
+    return false;
+  }
+  context->pos_cmd_pending = true;
   return true;
 }
 

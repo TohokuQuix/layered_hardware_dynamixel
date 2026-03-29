@@ -24,6 +24,7 @@ public:
     enable_operating_mode(context_, &DynamixelWorkbench::setTorqueControlMode, 0);
 
     write_items(context_, item_map_);
+    log_applied_config(context_, "torque");
 
     // set reasonable initial command
     context_->eff_cmd = 0.;

@@ -24,6 +24,7 @@ public:
     enable_operating_mode(context_, &DynamixelWorkbench::setVelocityControlMode, 1);
 
     write_items(context_, item_map_);
+    log_applied_config(context_, "velocity");
 
     // set reasonable initial command
     context_->vel_cmd = 0.;

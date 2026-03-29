@@ -66,6 +66,7 @@ public:
       msg << "Failed to ping " << get_display_name(*context_);
       throw std::runtime_error(msg.str());
     }
+    log_startup_config(context_);
 
     // make operating mode map from ros-controller name to dynamixel's operating mode
     for (const auto &mode_name : mapped_mode_names) {

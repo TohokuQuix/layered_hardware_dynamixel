@@ -16,7 +16,10 @@ public:
   TorqueDisableMode(const std::shared_ptr<DynamixelActuatorContext> &context)
       : OperatingModeInterface("torque_disable", context) {}
 
-  virtual void starting() override { torque_off(context_); }
+  virtual void starting() override {
+    torque_off(context_);
+    log_applied_config(context_, "torque_disable");
+  }
 
   virtual void read(const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/) override {
     // read pos, vel, eff, etc
