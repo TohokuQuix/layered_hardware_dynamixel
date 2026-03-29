@@ -4,6 +4,7 @@
 #include <cmath>
 #include <limits>
 #include <memory>
+#include <stdexcept>
 
 #include <layered_hardware_dynamixel/dynamixel_actuator_context.hpp>
 #include <layered_hardware_dynamixel/dynamixel_workbench_utils.hpp>
@@ -15,12 +16,18 @@ namespace layered_hardware_dynamixel {
 
 class PositionMode : public OperatingModeInterface {
 public:
-  PositionMode(const std::shared_ptr<DynamixelActuatorContext> &context)
-      : OperatingModeInterface("position", context) {}
+  PositionMode(const std::shared_ptr<DynamixelActuatorContext> &context,
+               const std::map< std::string, std::int32_t > &item_map)
+      : OperatingModeInterface("position", context), item_map_(item_map) {}
 
   virtual void starting() override {
     // switch to position mode & torque enable
-    enable_operating_mode(context_, &DynamixelWorkbench::setPositionControlMode);
+    if (!enable_operating_mode(context_, &DynamixelWorkbench::setPositionControlMode)) {
+      throw std::runtime_error("PositionMode::starting(): Failed to enable operating mode for " +
+                               get_display_name(*context_));
+    }
+
+    write_items(context_, item_map_);
 
     // use the present position as the initial command
     read_all_states(context_);
@@ -30,7 +37,9 @@ public:
 
   virtual void read(const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/) override {
     // read pos, vel, eff, etc
-    read_all_states(context_);
+    if (!context_->use_sync_read) {
+      read_all_states(context_);
+    }
   }
 
   virtual void write(const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/) override {
@@ -42,9 +51,12 @@ public:
     }
   }
 
-  virtual void stopping() override { torque_off(context_); }
+  virtual void stopping() override {
+    // torque_off(context_);
+  }
 
 private:
+  const std::map<std::string, std::int32_t> item_map_;
   double prev_pos_cmd_;
 };
 } // namespace layered_hardware_dynamixel

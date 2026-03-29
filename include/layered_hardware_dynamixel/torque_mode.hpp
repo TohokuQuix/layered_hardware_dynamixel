@@ -1,5 +1,5 @@
-#ifndef LAYERED_HARDWARE_DYNAMIXEL_CURRENT_MODE_HPP
-#define LAYERED_HARDWARE_DYNAMIXEL_CURRNET_MODE_HPP
+#ifndef LAYERED_HARDWARE_DYNAMIXEL_TORQUE_MODE_HPP
+#define LAYERED_HARDWARE_DYNAMIXEL_TORQUE_MODE_HPP
 
 #include <cmath>
 #include <limits>
@@ -14,16 +14,16 @@
 
 namespace layered_hardware_dynamixel {
 
-class CurrentMode : public OperatingModeInterface {
+class TorqueMode : public OperatingModeInterface {
 public:
-  CurrentMode(const std::shared_ptr<DynamixelActuatorContext> &context,
-              const std::map<std::string, std::int32_t> &item_map)
-      : OperatingModeInterface("current", context), item_map_(item_map) {}
+  TorqueMode(const std::shared_ptr<DynamixelActuatorContext> &context,
+             const std::map<std::string, std::int32_t> &item_map)
+      : OperatingModeInterface("torque", context), item_map_(item_map) {}
 
   virtual void starting() override {
     // switch to current mode
-    if (!enable_operating_mode(context_, &DynamixelWorkbench::setCurrentControlMode)) {
-      throw std::runtime_error("CurrentMode::starting(): Failed to enable operating mode for " +
+    if (!enable_operating_mode(context_, &DynamixelWorkbench::setTorqueControlMode)) {
+      throw std::runtime_error("TorqueMode::starting(): Failed to enable operating mode for " +
                                get_display_name(*context_));
     }
 

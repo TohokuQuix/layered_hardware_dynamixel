@@ -5,6 +5,7 @@
 #include <limits>
 #include <memory>
 #include <optional>
+#include <stdexcept>
 
 #include <layered_hardware_dynamixel/dynamixel_actuator_context.hpp>
 #include <layered_hardware_dynamixel/dynamixel_workbench_utils.hpp>
@@ -16,12 +17,19 @@ namespace layered_hardware_dynamixel {
 
 class CurrentBasedPositionMode : public OperatingModeInterface {
 public:
-  CurrentBasedPositionMode(const std::shared_ptr<DynamixelActuatorContext> &context)
-      : OperatingModeInterface("current_based_position", context) {}
+  CurrentBasedPositionMode(const std::shared_ptr<DynamixelActuatorContext> &context,
+                           const std::map<std::string, std::int32_t> &item_map)
+      : OperatingModeInterface("current_based_position", context), item_map_(item_map) {}
 
   virtual void starting() override {
     // switch to current-based position mode
-    enable_operating_mode(context_, &DynamixelWorkbench::setCurrentBasedPositionControlMode);
+    if (!enable_operating_mode(context_, &DynamixelWorkbench::setCurrentBasedPositionControlMode)) {
+      throw std::runtime_error(
+          "CurrentBasedPositionMode::starting(): Failed to enable operating mode for " +
+          get_display_name(*context_));
+    }
+
+    write_items(context_, item_map_);
 
     // use the present position as the initial position command
     read_all_states(context_);
@@ -37,7 +45,9 @@ public:
 
   virtual void read(const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/) override {
     // read pos, vel, eff, etc
-    read_all_states(context_);
+    if (!context_->use_sync_read) {
+      read_all_states(context_);
+    }
   }
 
   virtual void write(const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/) override {
@@ -83,9 +93,12 @@ public:
     }
   }
 
-  virtual void stopping() override { torque_off(context_); }
+  virtual void stopping() override {
+    // torque_off(context_);
+  }
 
 private:
+  const std::map<std::string, std::int32_t> item_map_;
   double prev_pos_cmd_, prev_vel_cmd_, prev_eff_cmd_;
   std::optional<double> cached_pos_;
 };

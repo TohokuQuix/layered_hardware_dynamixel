@@ -2,6 +2,9 @@
 #define LAYERED_HARDWARE_DYNAMIXEL_DYNAMIXEL_ACTUATOR_LAYER_HPP
 
 #include <memory>
+#include <cstdint>
+#include <cmath>
+#include <limits>
 #include <string>
 #include <utility> // for std::move()
 #include <vector>
@@ -26,6 +29,8 @@ namespace layered_hardware_dynamixel {
 
 class DynamixelActuatorLayer : public lh::LayerInterface {
 public:
+  virtual ~DynamixelActuatorLayer() override = default;
+
   virtual CallbackReturn on_init(const std::string &layer_name,
                                  const hi::HardwareInfo &hardware_info) override {
     // initialize the base class first
@@ -68,7 +73,6 @@ public:
                 serial_iface, baudrate);
       return CallbackReturn::ERROR;
     }
-
     // init actuators with param "actuators/<actuator_name>"
     for (std::size_t i = 0; i < ator_names.size(); ++i) {
       try {
@@ -79,6 +83,22 @@ public:
         return CallbackReturn::ERROR;
       }
       lhd_info("DynamixelActuatorLayer::on_init(): Initialized the actuator \"%s\"", ator_names[i]);
+      const auto &context = drivers_.back()->get_context();
+      contexts_.push_back(context);
+      ids_.push_back(context->id);
+    }
+
+    if (!drivers_.empty()) {
+      sync_read_enabled_ = init_sync_read(*dxl_wb);
+      for (const auto &context : contexts_) {
+        context->use_sync_read = sync_read_enabled_;
+      }
+      if (sync_read_enabled_) {
+        lhd_info("DynamixelActuatorLayer::on_init(): SyncRead enabled for %zu actuators",
+                 contexts_.size());
+      } else {
+        lhd_info("DynamixelActuatorLayer::on_init(): SyncRead disabled, using legacy itemRead");
+      }
     }
 
     return CallbackReturn::SUCCESS;
@@ -138,11 +158,30 @@ public:
   }
 
   virtual hi::return_type read(const rclcpp::Time &time, const rclcpp::Duration &period) override {
-    // read from all actuators
+    // read from all actuators (prefer SyncRead and fallback to legacy itemRead)
     hi::return_type result = hi::return_type::OK;
+    bool use_sync = false;
+    if (sync_read_enabled_) {
+      use_sync = sync_read_states();
+      if (!use_sync) {
+        lhd_error("DynamixelActuatorLayer::read(): SyncRead failed, falling back to legacy itemRead");
+      }
+    }
+
+    for (const auto &context : contexts_) {
+      context->use_sync_read = use_sync;
+    }
+
     for (const auto &driver : drivers_) {
       result = lh::merge(result, driver->read(time, period));
     }
+
+    if (sync_read_enabled_) {
+      for (const auto &context : contexts_) {
+        context->use_sync_read = true;
+      }
+    }
+
     return result;
   }
 
@@ -156,7 +195,139 @@ public:
   }
 
 private:
+  bool init_sync_read(DynamixelWorkbench &dxl_wb) {
+    if (ids_.empty()) {
+      return false;
+    }
+    if (ids_.size() > std::numeric_limits<std::uint8_t>::max()) {
+      lhd_error("DynamixelActuatorLayer::init_sync_read(): actuator count exceeds uint8_t limit");
+      return false;
+    }
+
+    const char *log = nullptr;
+    if (!dxl_wb.addSyncReadHandler(ids_.front(), "Present_Position", &log)) {
+      lhd_error("DynamixelActuatorLayer::init_sync_read(): Failed to add Present_Position handler: %s",
+                (log ? log : "No log from DynamixelWorkbench::addSyncReadHandler()"));
+      return false;
+    }
+    sync_idx_pos_ = 0;
+
+    log = nullptr;
+    if (!dxl_wb.addSyncReadHandler(ids_.front(), "Present_Velocity", &log)) {
+      lhd_error("DynamixelActuatorLayer::init_sync_read(): Failed to add Present_Velocity handler: %s",
+                (log ? log : "No log from DynamixelWorkbench::addSyncReadHandler()"));
+      return false;
+    }
+    sync_idx_vel_ = 1;
+
+    has_effort_sync_ = true;
+    for (const auto &context : contexts_) {
+      if (!has_effort(context)) {
+        has_effort_sync_ = false;
+        break;
+      }
+    }
+
+    if (has_effort_sync_) {
+      log = nullptr;
+      if (!dxl_wb.addSyncReadHandler(ids_.front(), "Present_Current", &log)) {
+        lhd_error("DynamixelActuatorLayer::init_sync_read(): Failed to add Present_Current handler: %s",
+                  (log ? log : "No log from DynamixelWorkbench::addSyncReadHandler()"));
+        return false;
+      }
+      sync_idx_eff_ = 2;
+    }
+
+    return true;
+  }
+
+  bool sync_read_states() {
+    if (contexts_.empty() || ids_.empty()) {
+      return false;
+    }
+
+    const auto id_count = static_cast<std::uint8_t>(ids_.size());
+    std::vector<std::int32_t> pos_raw(ids_.size());
+    std::vector<std::int32_t> vel_raw(ids_.size());
+    std::vector<std::int32_t> eff_raw(ids_.size(), 0);
+
+    const char *log = nullptr;
+    if (!drivers_.front()->get_context()->dxl_wb->syncRead(sync_idx_pos_, ids_.data(), id_count, &log)) {
+      lhd_error("DynamixelActuatorLayer::sync_read_states(): Failed syncRead(Present_Position): %s",
+                (log ? log : "No log from DynamixelWorkbench::syncRead()"));
+      return false;
+    }
+    log = nullptr;
+    if (!drivers_.front()->get_context()->dxl_wb->getSyncReadData(sync_idx_pos_, ids_.data(), id_count,
+                                                                   pos_raw.data(), &log)) {
+      lhd_error("DynamixelActuatorLayer::sync_read_states(): Failed getSyncReadData(Present_Position): %s",
+                (log ? log : "No log from DynamixelWorkbench::getSyncReadData()"));
+      return false;
+    }
+
+    log = nullptr;
+    if (!drivers_.front()->get_context()->dxl_wb->syncRead(sync_idx_vel_, ids_.data(), id_count, &log)) {
+      lhd_error("DynamixelActuatorLayer::sync_read_states(): Failed syncRead(Present_Velocity): %s",
+                (log ? log : "No log from DynamixelWorkbench::syncRead()"));
+      return false;
+    }
+    log = nullptr;
+    if (!drivers_.front()->get_context()->dxl_wb->getSyncReadData(sync_idx_vel_, ids_.data(), id_count,
+                                                                   vel_raw.data(), &log)) {
+      lhd_error("DynamixelActuatorLayer::sync_read_states(): Failed getSyncReadData(Present_Velocity): %s",
+                (log ? log : "No log from DynamixelWorkbench::getSyncReadData()"));
+      return false;
+    }
+
+    if (has_effort_sync_) {
+      log = nullptr;
+      if (!drivers_.front()->get_context()->dxl_wb->syncRead(sync_idx_eff_, ids_.data(), id_count, &log)) {
+        lhd_error("DynamixelActuatorLayer::sync_read_states(): Failed syncRead(Present_Current): %s",
+                  (log ? log : "No log from DynamixelWorkbench::syncRead()"));
+        return false;
+      }
+      log = nullptr;
+      if (!drivers_.front()->get_context()->dxl_wb->getSyncReadData(sync_idx_eff_, ids_.data(), id_count,
+                                                                     eff_raw.data(), &log)) {
+        lhd_error("DynamixelActuatorLayer::sync_read_states(): Failed getSyncReadData(Present_Current): %s",
+                  (log ? log : "No log from DynamixelWorkbench::getSyncReadData()"));
+        return false;
+      }
+    }
+
+    for (std::size_t i = 0; i < contexts_.size(); ++i) {
+      const auto &context = contexts_[i];
+      // convertValue2Radian() can disagree with getRadian() on some models/settings.
+      // Keep position readout consistent with the non-SyncRead path to avoid state jumps.
+      if (!read_position(context)) {
+        context->pos = context->dxl_wb->convertValue2Radian(context->id, pos_raw[i]);
+      }
+      context->vel = context->dxl_wb->convertValue2Velocity(context->id, vel_raw[i]);
+      // Some models return corrupted velocity in SyncRead intermittently.
+      // Fallback to per-servo itemRead when the converted value is clearly non-physical.
+      if (!std::isfinite(context->vel) || std::abs(context->vel) > 200.0) {
+        if (!read_velocity(context)) {
+          context->vel = 0.0;
+        }
+      }
+      if (has_effort_sync_) {
+        context->eff = context->dxl_wb->convertValue2Current(context->id, static_cast<std::int16_t>(eff_raw[i])) *
+                       context->torque_constant / 1000.0;
+      }
+    }
+
+    return true;
+  }
+
+private:
   std::vector<std::unique_ptr<DynamixelActuatorDriver>> drivers_;
+  std::vector<std::shared_ptr<DynamixelActuatorContext>> contexts_;
+  std::vector<std::uint8_t> ids_;
+  bool sync_read_enabled_ = false;
+  bool has_effort_sync_ = false;
+  std::uint8_t sync_idx_pos_ = 0;
+  std::uint8_t sync_idx_vel_ = 1;
+  std::uint8_t sync_idx_eff_ = 2;
 };
 } // namespace layered_hardware_dynamixel
 

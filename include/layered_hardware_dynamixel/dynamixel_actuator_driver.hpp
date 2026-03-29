@@ -22,6 +22,7 @@
 #include <layered_hardware_dynamixel/operating_mode_interface.hpp>
 #include <layered_hardware_dynamixel/position_mode.hpp>
 #include <layered_hardware_dynamixel/reboot_mode.hpp>
+#include <layered_hardware_dynamixel/torque_mode.hpp>
 #include <layered_hardware_dynamixel/torque_disable_mode.hpp>
 #include <layered_hardware_dynamixel/velocity_mode.hpp>
 #include <rclcpp/duration.hpp>
@@ -63,8 +64,10 @@ public:
 
     // make operating mode map from ros-controller name to dynamixel's operating mode
     for (const auto &mode_name : mapped_mode_names) {
+      std::map<std::string, std::int32_t> item_map;
+      get_int32_map_param(params["item_map"], mode_name, item_map);
       try {
-        mapped_modes_.emplace_back(make_operating_mode(mode_name));
+        mapped_modes_.emplace_back(make_operating_mode(mode_name, item_map));
       } catch (const std::runtime_error &error) {
         throw std::runtime_error("Invalid value in \"operating_mode_map\" parameter for " +
                                  get_display_name(*context_) + ": " + error.what());
@@ -130,8 +133,19 @@ public:
   hi::return_type read(const rclcpp::Time &time, const rclcpp::Duration &period) {
     if (present_mode_) {
       present_mode_->read(time, period);
+    } else {
+      // Keep one consistent read path regardless of controller activation.
+      // When SyncRead already updated states in layer->read(), don't overwrite
+      // with per-servo reads here.
+      if (!context_->use_sync_read) {
+        if (!read_all_states(context_)) {
+          lhd_error("DynamixelActuatorDriver::read(): Failed to read state from %s",
+                    get_display_name(*context_));
+          return hi::return_type::ERROR;
+        }
+      }
     }
-    return hi::return_type::OK; // TODO: return result of read
+    return hi::return_type::OK;
   }
 
   hi::return_type write(const rclcpp::Time &time, const rclcpp::Duration &period) {
@@ -141,24 +155,46 @@ public:
     return hi::return_type::OK; // TODO: return result of write
   }
 
+  const std::shared_ptr<DynamixelActuatorContext> &get_context() const { return context_; }
+
 private:
-  std::shared_ptr<OperatingModeInterface> make_operating_mode(const std::string &mode_str) const {
+  static bool get_int32_map_param(const YAML::Node &node,
+                                  const std::string &key,
+                                  std::map<std::string, std::int32_t> &item_map) {
+    try {
+      if (!node || !node[key]) {
+        lhd_info("get_int32_map_param(): Parameter \"%s\" not found. passing..", key);
+        return false;
+      }
+      for (const auto &item : node[key]) {
+        item_map[item.first.as<std::string>()] = item.second.as<std::int32_t>();
+      }
+    } catch (const YAML::Exception &error) {
+      lhd_error("get_int32_map_param(): Failed to parse parameter: %s", error.what());
+      return false;
+    }
+    return true;
+  }
+
+  std::shared_ptr<OperatingModeInterface> make_operating_mode(const std::string &mode_str, const std::map<std::string, std::int32_t> &item_map) const {
     if (mode_str == "clear_multi_turn") {
       return std::make_shared<ClearMultiTurnMode>(context_);
     } else if (mode_str == "current") {
-      return std::make_shared<CurrentMode>(context_);
+      return std::make_shared<CurrentMode>(context_, item_map);
     } else if (mode_str == "current_based_position") {
-      return std::make_shared<CurrentBasedPositionMode>(context_);
+      return std::make_shared<CurrentBasedPositionMode>(context_, item_map);
     } else if (mode_str == "extended_position") {
-      return std::make_shared<ExtendedPositionMode>(context_);
+      return std::make_shared<ExtendedPositionMode>(context_, item_map);
     } else if (mode_str == "position") {
-      return std::make_shared<PositionMode>(context_);
+      return std::make_shared<PositionMode>(context_, item_map);
     } else if (mode_str == "reboot") {
       return std::make_shared<RebootMode>(context_);
+    } else if (mode_str == "torque") {
+      return std::make_shared<TorqueMode>(context_, item_map);
     } else if (mode_str == "torque_disable") {
       return std::make_shared<TorqueDisableMode>(context_);
     } else if (mode_str == "velocity") {
-      return std::make_shared<VelocityMode>(context_);
+      return std::make_shared<VelocityMode>(context_, item_map);
     } else {
       throw std::runtime_error("Unknown operating mode name \"" + mode_str + "\" for " +
                                get_display_name(*context_));
