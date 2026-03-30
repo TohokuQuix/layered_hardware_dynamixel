@@ -4,6 +4,7 @@
 #include <cmath>
 #include <limits>
 #include <memory>
+#include <stdexcept>
 
 #include <layered_hardware_dynamixel/dynamixel_actuator_context.hpp>
 #include <layered_hardware_dynamixel/dynamixel_workbench_utils.hpp>
@@ -21,7 +22,10 @@ public:
 
   virtual void starting() override {
     // switch to position mode & torque enable
-    enable_operating_mode(context_, &DynamixelWorkbench::setPositionControlMode, 3);
+    if (!enable_operating_mode(context_, &DynamixelWorkbench::setPositionControlMode)) {
+      throw std::runtime_error("PositionMode::starting(): Failed to enable operating mode for " +
+                               get_display_name(*context_));
+    }
 
     write_items(context_, item_map_);
     log_applied_config(context_, "position");

@@ -5,6 +5,7 @@
 #include <limits>
 #include <memory>
 #include <optional>
+#include <stdexcept>
 
 #include <layered_hardware_dynamixel/dynamixel_actuator_context.hpp>
 #include <layered_hardware_dynamixel/dynamixel_workbench_utils.hpp>
@@ -22,7 +23,11 @@ public:
 
   virtual void starting() override {
     // switch to current-based position mode
-    enable_operating_mode(context_, &DynamixelWorkbench::setCurrentBasedPositionControlMode, 5);
+    if (!enable_operating_mode(context_, &DynamixelWorkbench::setCurrentBasedPositionControlMode)) {
+      throw std::runtime_error(
+          "CurrentBasedPositionMode::starting(): Failed to enable operating mode for " +
+          get_display_name(*context_));
+    }
 
     write_items(context_, item_map_);
     log_applied_config(context_, "current_based_position");
