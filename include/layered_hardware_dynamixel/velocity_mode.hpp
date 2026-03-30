@@ -21,9 +21,10 @@ public:
 
   virtual void starting() override {
     // switch to velocity mode
-    enable_operating_mode(context_, &DynamixelWorkbench::setVelocityControlMode);
+    enable_operating_mode(context_, &DynamixelWorkbench::setVelocityControlMode, 1);
 
     write_items(context_, item_map_);
+    log_applied_config(context_, "velocity");
 
     // set reasonable initial command
     context_->vel_cmd = 0.;
@@ -31,7 +32,9 @@ public:
   }
 
   virtual void read(const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/) override {
-    read_all_states(context_);
+    if (!context_->use_sync_read) {
+      read_all_states(context_);
+    }
   }
 
   virtual void write(const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/) override {
@@ -41,7 +44,11 @@ public:
     }
   }
 
-  virtual void stopping() override { torque_off(context_); }
+  virtual void stopping() override {
+    if (context_->torque_off_on_stop) {
+      torque_off(context_);
+    }
+  }
 
 private:
   const std::map<std::string, std::int32_t> item_map_;

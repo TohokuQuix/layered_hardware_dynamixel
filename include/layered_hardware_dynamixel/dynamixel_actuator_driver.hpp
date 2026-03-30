@@ -35,14 +35,18 @@ namespace layered_hardware_dynamixel {
 class DynamixelActuatorDriver {
 public:
   DynamixelActuatorDriver(const std::string &name, const YAML::Node &params,
-                          const std::shared_ptr<DynamixelWorkbench> &dxl_wb) {
+                          const std::shared_ptr<DynamixelWorkbench> &dxl_wb,
+                          const bool default_torque_off_on_stop) {
     // parse parameters for this actuator
     std::uint8_t id;
     double torque_constant;
+    bool torque_off_on_stop = default_torque_off_on_stop;
     std::vector<std::string> mapped_mode_names;
     try {
       id = static_cast<std::uint8_t>(params["id"].as<int>());
       torque_constant = params["torque_constant"].as<double>();
+      torque_off_on_stop =
+          params["torque_off_on_stop"].as<bool>(default_torque_off_on_stop);
       for (const auto &iface_mode_name_pair : params["operating_mode_map"]) {
         bound_interfaces_.emplace_back(iface_mode_name_pair.first.as<std::string>());
         mapped_mode_names.emplace_back(iface_mode_name_pair.second.as<std::string>());
@@ -53,7 +57,8 @@ public:
     }
 
     // allocate context
-    context_.reset(new DynamixelActuatorContext{name, dxl_wb, id, torque_constant});
+    context_.reset(
+        new DynamixelActuatorContext{name, dxl_wb, id, torque_constant, torque_off_on_stop});
 
     // find dynamixel actuator by id
     if (!ping(context_)) {
@@ -61,6 +66,7 @@ public:
       msg << "Failed to ping " << get_display_name(*context_);
       throw std::runtime_error(msg.str());
     }
+    log_startup_config(context_);
 
     // make operating mode map from ros-controller name to dynamixel's operating mode
     for (const auto &mode_name : mapped_mode_names) {
@@ -133,8 +139,19 @@ public:
   hi::return_type read(const rclcpp::Time &time, const rclcpp::Duration &period) {
     if (present_mode_) {
       present_mode_->read(time, period);
+    } else {
+      // Keep one consistent read path regardless of controller activation.
+      // When SyncRead already updated states in layer->read(), don't overwrite
+      // with per-servo reads here.
+      if (!context_->use_sync_read) {
+        if (!read_all_states(context_)) {
+          lhd_error("DynamixelActuatorDriver::read(): Failed to read state from %s",
+                    get_display_name(*context_));
+          return hi::return_type::ERROR;
+        }
+      }
     }
-    return hi::return_type::OK; // TODO: return result of read
+    return hi::return_type::OK;
   }
 
   hi::return_type write(const rclcpp::Time &time, const rclcpp::Duration &period) {
@@ -143,6 +160,8 @@ public:
     }
     return hi::return_type::OK; // TODO: return result of write
   }
+
+  const std::shared_ptr<DynamixelActuatorContext> &get_context() const { return context_; }
 
 private:
   static bool get_int32_map_param(const YAML::Node &node,
