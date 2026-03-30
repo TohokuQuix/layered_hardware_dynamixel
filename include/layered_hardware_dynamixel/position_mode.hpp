@@ -28,6 +28,7 @@ public:
     }
 
     write_items(context_, item_map_);
+    log_applied_config(context_, "position");
 
     // use the present position as the initial command
     read_all_states(context_);
@@ -46,13 +47,22 @@ public:
     // write goal position if the goal pos or profile velocity have been updated
     // to make the change affect
     if (!std::isnan(context_->pos_cmd) && context_->pos_cmd != prev_pos_cmd_) {
-      write_position_command(context_);
-      prev_pos_cmd_ = context_->pos_cmd;
+      if (context_->use_sync_write) {
+        if (enqueue_position_command(context_)) {
+          prev_pos_cmd_ = context_->pos_cmd;
+        }
+      } else {
+        if (write_position_command(context_)) {
+          prev_pos_cmd_ = context_->pos_cmd;
+        }
+      }
     }
   }
 
   virtual void stopping() override {
-    // torque_off(context_);
+    if (context_->torque_off_on_stop) {
+      torque_off(context_);
+    }
   }
 
 private:

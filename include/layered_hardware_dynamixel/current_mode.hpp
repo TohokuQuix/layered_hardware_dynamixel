@@ -28,6 +28,7 @@ public:
     }
 
     write_items(context_, item_map_);
+    log_applied_config(context_, "current");
 
     // set reasonable initial command
     context_->eff_cmd = 0.;
@@ -48,7 +49,9 @@ public:
   }
 
   virtual void stopping() override {
-    // torque_off(context_);
+    if (context_->torque_off_on_stop) {
+      torque_off(context_);
+    }
   }
 
 private:

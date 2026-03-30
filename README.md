@@ -16,6 +16,9 @@ ___<layer_name>.serial_interface___ (string, default: '/dev/ttyUSB0')
 ___<layer_name>.baudrate___ (int, default: 115200)
 * baudrate for Usb2Dynamixel device
 
+___<layer_name>.torque_off_on_stop___ (bool, default: true)
+* whether to send torque-off command when the active operating mode stops (e.g. node shutdown)
+
 ___<layer_name>.actuators___ (map<string, map>, required)
 * map of parameters for each actuator
 
@@ -26,6 +29,10 @@ ___<layer_name>.actuators.<actuator_name>.torque_constant___ (double, required)
 * torque constant for conversion between current and torque in N*m/A
 * ex. if the actuator's stall torque & current are 10.6 N*m & 4.4 A at the operating voltage, it would be 2.41 (= 10.6 / 4.4)
 
+___<layer_name>.actuators.<actuator_name>.torque_off_on_stop___ (bool, optional)
+* per-actuator override for `torque_off_on_stop`
+* when omitted, falls back to `<layer_name>.torque_off_on_stop`
+
 ___<layer_name>.actuators.<actuator_name>.operating_mode_map___ (map<string, string>, required)
 * map to actuator's operating mode names from associated interface names (typically joint interfaces)
 * possible operating mode names are 'clear_multi_turn', 'current_based_position', 'current', 'extended_position', 'reboot', 'torque_disable', & 'velocity'
@@ -35,10 +42,12 @@ ___<layer_name>.actuators.<actuator_name>.operating_mode_map___ (map<string, str
 <param name="example_dynamixel_actuator_layer">
     serial_interface: /dev/serial/by-id/...
     baudrate: 1000000
+    torque_off_on_stop: false
     actuators:
         example_dynamixel_1:
             id: 1
             torque_constant: 2.41
+            torque_off_on_stop: false
             operating_mode_map:
                 example_joint_1/position: extended_position
                 ...
