@@ -23,7 +23,7 @@ public:
 
   virtual void starting() override {
     // switch to current-based position mode
-    if (!enable_operating_mode(context_, &DynamixelWorkbench::setCurrentBasedPositionControlMode)) {
+    if (!enable_operating_mode(context_, &DynamixelWorkbench::setCurrentBasedPositionControlMode, 5)) {
       throw std::runtime_error(
           "CurrentBasedPositionMode::starting(): Failed to enable operating mode for " +
           get_display_name(*context_));

@@ -22,7 +22,7 @@ public:
 
   virtual void starting() override {
     // switch to velocity mode
-    if (!enable_operating_mode(context_, &DynamixelWorkbench::setVelocityControlMode)) {
+    if (!enable_operating_mode(context_, &DynamixelWorkbench::setVelocityControlMode, 1)) {
       throw std::runtime_error("VelocityMode::starting(): Failed to enable operating mode for " +
                                get_display_name(*context_));
     }

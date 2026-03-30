@@ -22,7 +22,7 @@ public:
 
   virtual void starting() override {
     // switch to position mode & torque enable
-    if (!enable_operating_mode(context_, &DynamixelWorkbench::setPositionControlMode)) {
+    if (!enable_operating_mode(context_, &DynamixelWorkbench::setPositionControlMode, 3)) {
       throw std::runtime_error("PositionMode::starting(): Failed to enable operating mode for " +
                                get_display_name(*context_));
     }

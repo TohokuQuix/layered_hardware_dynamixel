@@ -22,7 +22,7 @@ public:
 
   virtual void starting() override {
     // switch to current mode
-    if (!enable_operating_mode(context_, &DynamixelWorkbench::setCurrentControlMode)) {
+    if (!enable_operating_mode(context_, &DynamixelWorkbench::setCurrentControlMode, 0)) {
       throw std::runtime_error("CurrentMode::starting(): Failed to enable operating mode for " +
                                get_display_name(*context_));
     }
