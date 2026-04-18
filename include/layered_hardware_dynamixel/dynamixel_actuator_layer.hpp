@@ -344,6 +344,24 @@ private:
       sync_idx_eff_ = 2;
     }
 
+    has_voltage_sync_ = true;
+    for (const auto &context : contexts_) {
+      if (!has_item(context, "Present_Input_Voltage")) {
+        has_voltage_sync_ = false;
+        break;
+      }
+    }
+
+    if (has_voltage_sync_) {
+      log = nullptr;
+      if (!dxl_wb.addSyncReadHandler(ids_.front(), "Present_Input_Voltage", &log)) {
+        lhd_error("DynamixelActuatorLayer::init_sync_read(): Failed to add Present_Input_Voltage handler: %s",
+                  (log ? log : "No log from DynamixelWorkbench::addSyncReadHandler()"));
+        return false;
+      }
+      sync_idx_voltage_ = has_effort_sync_ ? 3 : 2;
+    }
+
     return true;
   }
 
@@ -356,6 +374,7 @@ private:
     std::vector<std::int32_t> pos_raw(ids_.size());
     std::vector<std::int32_t> vel_raw(ids_.size());
     std::vector<std::int32_t> eff_raw(ids_.size(), 0);
+    std::vector<std::int32_t> voltage_raw(ids_.size(), 0);
 
     const char *log = nullptr;
     if (!drivers_.front()->get_context()->dxl_wb->syncRead(sync_idx_pos_, ids_.data(), id_count, &log)) {
@@ -401,6 +420,22 @@ private:
       }
     }
 
+    if (has_voltage_sync_) {
+      log = nullptr;
+      if (!drivers_.front()->get_context()->dxl_wb->syncRead(sync_idx_voltage_, ids_.data(), id_count, &log)) {
+        lhd_error("DynamixelActuatorLayer::sync_read_states(): Failed syncRead(Present_Input_Voltage): %s",
+                  (log ? log : "No log from DynamixelWorkbench::syncRead()"));
+        return false;
+      }
+      log = nullptr;
+      if (!drivers_.front()->get_context()->dxl_wb->getSyncReadData(sync_idx_voltage_, ids_.data(), id_count,
+                                                                     voltage_raw.data(), &log)) {
+        lhd_error("DynamixelActuatorLayer::sync_read_states(): Failed getSyncReadData(Present_Input_Voltage): %s",
+                  (log ? log : "No log from DynamixelWorkbench::getSyncReadData()"));
+        return false;
+      }
+    }
+
     for (std::size_t i = 0; i < contexts_.size(); ++i) {
       const auto &context = contexts_[i];
       // convertValue2Radian() can disagree with getRadian() on some models/settings.
@@ -419,6 +454,11 @@ private:
         context->eff = context->dxl_wb->convertValue2Current(context->id, static_cast<std::int16_t>(eff_raw[i])) *
                        context->torque_constant / 1000.0;
       }
+      if (has_voltage_sync_) {
+        context->voltage = static_cast<double>(voltage_raw[i]) / 10.0;
+      } else if (has_voltage(context)) {
+        (void)read_voltage(context);
+      }
     }
 
     return true;
@@ -432,9 +472,11 @@ private:
   bool sync_write_enabled_ = false;
   std::string layer_name_ = "unknown";
   bool has_effort_sync_ = false;
+  bool has_voltage_sync_ = false;
   std::uint8_t sync_idx_pos_ = 0;
   std::uint8_t sync_idx_vel_ = 1;
   std::uint8_t sync_idx_eff_ = 2;
+  std::uint8_t sync_idx_voltage_ = 3;
 };
 } // namespace layered_hardware_dynamixel
 

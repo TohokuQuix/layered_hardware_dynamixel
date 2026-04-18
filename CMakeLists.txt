@@ -9,16 +9,27 @@ endif()
 
 ## Find dependencies
 find_package(ament_cmake REQUIRED)
+find_package(ament_cmake_python REQUIRED)
+find_package(builtin_interfaces REQUIRED)
 find_package(dynamixel_workbench_toolbox REQUIRED)
 find_package(controller_interface REQUIRED)
 find_package(hardware_interface REQUIRED)
 find_package(layered_hardware REQUIRED)
 find_package(pluginlib REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(rosidl_default_generators REQUIRED)
+find_package(std_msgs REQUIRED)
 # yaml_cpp_vendor builds yaml-cpp if not installed
 find_package(yaml_cpp_vendor REQUIRED)
 
 find_package(yaml-cpp REQUIRED)
+
+rosidl_generate_interfaces(
+  ${PROJECT_NAME}
+  "msg/DynamixelLedColor.msg"
+  "msg/DynamixelLedColors.msg"
+  DEPENDENCIES builtin_interfaces
+)
 
 ## Declare a C++ library
 add_library(
@@ -52,9 +63,15 @@ install(
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin)
 install(
+  PROGRAMS
+    scripts/dynamixel_led_colors_bridge.py
+  DESTINATION lib/${PROJECT_NAME})
+install(
   DIRECTORY examples
   DESTINATION share/layered_hardware_dynamixel)
 
 # TODO: declare tests here
+
+ament_export_dependencies(rosidl_default_runtime)
 
 ament_package()

@@ -191,6 +191,41 @@ static inline bool has_effort(const std::shared_ptr<DynamixelActuatorContext> &c
   return has_item(context, "Present_Current");
 }
 
+static inline bool has_voltage(const std::shared_ptr<DynamixelActuatorContext> &context) {
+  return has_item(context, "Present_Input_Voltage") || has_item(context, "Present_Voltage");
+}
+
+static inline std::string find_led_item_name(const std::shared_ptr<DynamixelActuatorContext> &context) {
+  if (has_item(context, "LED")) {
+    return "LED";
+  }
+  return "";
+}
+
+static inline std::string
+find_led_red_item_name(const std::shared_ptr<DynamixelActuatorContext> &context) {
+  if (has_item(context, "LED_RED")) {
+    return "LED_RED";
+  }
+  return "";
+}
+
+static inline std::string
+find_led_green_item_name(const std::shared_ptr<DynamixelActuatorContext> &context) {
+  if (has_item(context, "LED_GREEN")) {
+    return "LED_GREEN";
+  }
+  return "";
+}
+
+static inline std::string
+find_led_blue_item_name(const std::shared_ptr<DynamixelActuatorContext> &context) {
+  if (has_item(context, "LED_BLUE")) {
+    return "LED_BLUE";
+  }
+  return "";
+}
+
 static inline bool read_effort(const std::shared_ptr<DynamixelActuatorContext> &context) {
   std::int32_t value;
   if (!read_item(context, "Present_Current", &value)) {
@@ -202,13 +237,33 @@ static inline bool read_effort(const std::shared_ptr<DynamixelActuatorContext> &
   return true;
 }
 
+static inline bool read_voltage(const std::shared_ptr<DynamixelActuatorContext> &context) {
+  std::int32_t value = 0;
+  if (has_item(context, "Present_Input_Voltage")) {
+    if (!read_item(context, "Present_Input_Voltage", &value)) {
+      return false;
+    }
+  } else if (has_item(context, "Present_Voltage")) {
+    if (!read_item(context, "Present_Voltage", &value)) {
+      return false;
+    }
+  } else {
+    return false;
+  }
+
+  // The Dynamixel control table reports voltage in 0.1 V units.
+  context->voltage = static_cast<double>(value) / 10.0;
+  return true;
+}
+
 static inline bool read_all_states(const std::shared_ptr<DynamixelActuatorContext> &context) {
   // if one fails, "return read_position() && read_velocity() && ..." does not call others.
   // on the other hand, lines below call all anyway to read info as much as possible.
   const bool pos_result = read_position(context);
   const bool vel_result = read_velocity(context);
   const bool eff_result = has_effort(context) ? read_effort(context) : true;
-  return pos_result && vel_result && eff_result;
+  const bool voltage_result = has_voltage(context) ? read_voltage(context) : true;
+  return pos_result && vel_result && eff_result && voltage_result;
 }
 
 // write functions
@@ -376,6 +431,76 @@ static inline bool write_effort_command(const std::shared_ptr<DynamixelActuatorC
       context, "Goal_Current",
       context->dxl_wb->convertCurrent2Value(
           context->id, static_cast<float>(context->eff_cmd / context->torque_constant * 1000.0)));
+}
+
+static inline bool write_led_command(const std::shared_ptr<DynamixelActuatorContext> &context) {
+  if (context->led_item_name.empty()) {
+    return true;
+  }
+  if (!std::isfinite(context->led_cmd)) {
+    return true;
+  }
+
+  std::int32_t value = static_cast<std::int32_t>(std::lround(context->led_cmd));
+  if (context->led_item_name == "LED") {
+    value = (value == 0) ? 0 : 1;
+  } else {
+    value = std::clamp(value, 0, 255);
+  }
+
+  if (context->has_last_led_cmd_write && context->last_led_cmd_written == value) {
+    return true;
+  }
+  if (!write_item(context, context->led_item_name, value)) {
+    return false;
+  }
+  context->last_led_cmd_written = value;
+  context->has_last_led_cmd_write = true;
+  return true;
+}
+
+static inline bool write_led_channel_command(const std::shared_ptr<DynamixelActuatorContext> &context,
+                                             const std::string &item_name,
+                                             const double cmd_value,
+                                             bool *has_last_write,
+                                             std::int32_t *last_written) {
+  if (item_name.empty()) {
+    return true;
+  }
+  if (!std::isfinite(cmd_value)) {
+    return true;
+  }
+
+  const std::int32_t value =
+      std::clamp(static_cast<std::int32_t>(std::lround(cmd_value)), 0, 255);
+  if (*has_last_write && *last_written == value) {
+    return true;
+  }
+  if (!write_item(context, item_name, value)) {
+    return false;
+  }
+  *last_written = value;
+  *has_last_write = true;
+  return true;
+}
+
+static inline bool write_led_red_command(const std::shared_ptr<DynamixelActuatorContext> &context) {
+  return write_led_channel_command(context, context->led_red_item_name, context->led_red_cmd,
+                                   &context->has_last_led_red_cmd_write,
+                                   &context->last_led_red_cmd_written);
+}
+
+static inline bool
+write_led_green_command(const std::shared_ptr<DynamixelActuatorContext> &context) {
+  return write_led_channel_command(context, context->led_green_item_name, context->led_green_cmd,
+                                   &context->has_last_led_green_cmd_write,
+                                   &context->last_led_green_cmd_written);
+}
+
+static inline bool write_led_blue_command(const std::shared_ptr<DynamixelActuatorContext> &context) {
+  return write_led_channel_command(context, context->led_blue_item_name, context->led_blue_cmd,
+                                   &context->has_last_led_blue_cmd_write,
+                                   &context->last_led_blue_cmd_written);
 }
 
 } // namespace layered_hardware_dynamixel

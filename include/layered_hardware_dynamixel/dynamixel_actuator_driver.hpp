@@ -59,6 +59,10 @@ public:
     // allocate context
     context_.reset(
         new DynamixelActuatorContext{name, dxl_wb, id, torque_constant, torque_off_on_stop});
+    context_->led_item_name = find_led_item_name(context_);
+    context_->led_red_item_name = find_led_red_item_name(context_);
+    context_->led_green_item_name = find_led_green_item_name(context_);
+    context_->led_blue_item_name = find_led_blue_item_name(context_);
 
     // find dynamixel actuator by id
     if (!ping(context_)) {
@@ -92,6 +96,7 @@ public:
     ifaces.emplace_back(context_->name, hi::HW_IF_POSITION, &context_->pos);
     ifaces.emplace_back(context_->name, hi::HW_IF_VELOCITY, &context_->vel);
     ifaces.emplace_back(context_->name, hi::HW_IF_EFFORT, &context_->eff);
+    ifaces.emplace_back(context_->name, HW_IF_VOLTAGE, &context_->voltage);
     return ifaces;
   }
 
@@ -101,6 +106,18 @@ public:
     ifaces.emplace_back(context_->name, hi::HW_IF_POSITION, &context_->pos_cmd);
     ifaces.emplace_back(context_->name, hi::HW_IF_VELOCITY, &context_->vel_cmd);
     ifaces.emplace_back(context_->name, hi::HW_IF_EFFORT, &context_->eff_cmd);
+    if (!context_->led_item_name.empty()) {
+      ifaces.emplace_back(context_->name, HW_IF_LED, &context_->led_cmd);
+    }
+    if (!context_->led_red_item_name.empty()) {
+      ifaces.emplace_back(context_->name, HW_IF_LED_RED, &context_->led_red_cmd);
+    }
+    if (!context_->led_green_item_name.empty()) {
+      ifaces.emplace_back(context_->name, HW_IF_LED_GREEN, &context_->led_green_cmd);
+    }
+    if (!context_->led_blue_item_name.empty()) {
+      ifaces.emplace_back(context_->name, HW_IF_LED_BLUE, &context_->led_blue_cmd);
+    }
     return ifaces;
   }
 
@@ -155,6 +172,26 @@ public:
   }
 
   hi::return_type write(const rclcpp::Time &time, const rclcpp::Duration &period) {
+    if (!write_led_command(context_)) {
+      lhd_error("DynamixelActuatorDriver::write(): Failed to write LED command to %s",
+                get_display_name(*context_));
+      return hi::return_type::ERROR;
+    }
+    if (!write_led_red_command(context_)) {
+      lhd_error("DynamixelActuatorDriver::write(): Failed to write LED_RED command to %s",
+                get_display_name(*context_));
+      return hi::return_type::ERROR;
+    }
+    if (!write_led_green_command(context_)) {
+      lhd_error("DynamixelActuatorDriver::write(): Failed to write LED_GREEN command to %s",
+                get_display_name(*context_));
+      return hi::return_type::ERROR;
+    }
+    if (!write_led_blue_command(context_)) {
+      lhd_error("DynamixelActuatorDriver::write(): Failed to write LED_BLUE command to %s",
+                get_display_name(*context_));
+      return hi::return_type::ERROR;
+    }
     if (present_mode_) {
       present_mode_->write(time, period);
     }
