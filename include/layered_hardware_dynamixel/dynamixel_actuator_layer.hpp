@@ -114,6 +114,7 @@ public:
         lhd_info("DynamixelActuatorLayer::on_init(): SyncRead enabled for %zu actuators",
                  contexts_.size());
       } else {
+        lhd_error("DynamixelActuatorLayer::on_init(): SyncRead initialization failed or was disabled; falling back to legacy itemRead");
         lhd_info("DynamixelActuatorLayer::on_init(): SyncRead disabled, using legacy itemRead");
       }
 
