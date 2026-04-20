@@ -19,7 +19,12 @@ class CurrentBasedPositionMode : public OperatingModeInterface {
 public:
   CurrentBasedPositionMode(const std::shared_ptr<DynamixelActuatorContext> &context,
                            const std::map<std::string, std::int32_t> &item_map)
-      : OperatingModeInterface("current_based_position", context), item_map_(item_map) {}
+      : OperatingModeInterface("current_based_position", context), item_map_(item_map) {
+    const auto it = item_map_.find("Goal_Current");
+    if (it != item_map_.end()) {
+      configured_goal_current_ = it->second;
+    }
+  }
 
   virtual void starting() override {
     // switch to current-based position mode
@@ -36,7 +41,8 @@ public:
     read_all_states(context_);
     context_->pos_cmd = context_->pos;
     context_->vel_cmd = 0.; // use velocity limit in the dynamixel's control table
-    context_->eff_cmd = 0.; // use torque limit in the dynamixel's control table
+    // Keep Goal_Current from item_map until an explicit effort command is given.
+    context_->eff_cmd = std::numeric_limits<double>::quiet_NaN();
     prev_pos_cmd_ = std::numeric_limits<double>::quiet_NaN();
     prev_vel_cmd_ = std::numeric_limits<double>::quiet_NaN();
     prev_eff_cmd_ = std::numeric_limits<double>::quiet_NaN();
@@ -99,6 +105,12 @@ public:
         }
       }
     }
+
+    // Some setups appear to restore Goal_Current after startup/position updates.
+    // Keep the configured clamp unless an explicit effort command is being used.
+    if (configured_goal_current_ && std::isnan(context_->eff_cmd)) {
+      write_item(context_, "Goal_Current", configured_goal_current_.value());
+    }
   }
 
   virtual void stopping() override {
@@ -111,6 +123,7 @@ private:
   const std::map<std::string, std::int32_t> item_map_;
   double prev_pos_cmd_, prev_vel_cmd_, prev_eff_cmd_;
   std::optional<double> cached_pos_;
+  std::optional<std::int32_t> configured_goal_current_;
 };
 } // namespace layered_hardware_dynamixel
 
