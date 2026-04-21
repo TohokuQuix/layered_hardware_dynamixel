@@ -85,10 +85,7 @@ public:
     }
   }
 
-  virtual ~DynamixelActuatorDriver() {
-    // finalize the present mode
-    switch_operating_modes(/* new_mode = */ nullptr);
-  }
+  virtual ~DynamixelActuatorDriver() = default;
 
   std::vector<hi::StateInterface> export_state_interfaces() {
     // export reference to actuator states owned by this actuator
@@ -148,7 +145,8 @@ public:
     if (!active_bound_ifaces.empty()) { // active_bound_ifaces.size() == 1
       switch_operating_modes(mapped_modes_[active_bound_ifaces.front()]);
     } else { // active_bound_ifaces.size() == 0
-      switch_operating_modes(nullptr);
+      // Preserve the last active actuator mode when controllers deactivate.
+      // This avoids dropping servo holding state during ros2_control shutdown.
     }
     return hi::return_type::OK;
   }

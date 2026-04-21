@@ -1,6 +1,7 @@
 #ifndef LAYERED_HARDWARE_DYNAMIXEL_DYNAMIXEL_ACTUATOR_LAYER_HPP
 #define LAYERED_HARDWARE_DYNAMIXEL_DYNAMIXEL_ACTUATOR_LAYER_HPP
 
+#include <cstdlib>
 #include <memory>
 #include <cstdint>
 #include <cmath>
@@ -26,6 +27,20 @@
 #include <yaml-cpp/yaml.h>
 
 namespace layered_hardware_dynamixel {
+
+static inline bool parse_env_bool(const char *value, bool fallback) {
+  if (!value) {
+    return fallback;
+  }
+  const std::string s(value);
+  if (s == "1" || s == "true" || s == "TRUE" || s == "on" || s == "ON") {
+    return true;
+  }
+  if (s == "0" || s == "false" || s == "FALSE" || s == "off" || s == "OFF") {
+    return false;
+  }
+  return fallback;
+}
 
 class DynamixelActuatorLayer : public lh::LayerInterface {
 public:
@@ -72,14 +87,26 @@ public:
                 error, layer_name);
       return CallbackReturn::ERROR;
     }
+
+    torque_off_on_stop = parse_env_bool(std::getenv("DXLWB_TORQUE_OFF_ON_EXIT"), torque_off_on_stop);
     if (ator_names.empty()) {
       lhd_error("DynamixelActuatorLayer::on_init(): no actuators configured in \"%s\" parameter",
                 layer_name);
       return CallbackReturn::ERROR;
     }
 
+    const bool preserve_torque_on_exit = !torque_off_on_stop;
+
     // open USB serial device
-    const auto dxl_wb = std::make_shared<DynamixelWorkbench>();
+    const auto dxl_wb = preserve_torque_on_exit
+                            ? std::shared_ptr<DynamixelWorkbench>(
+                                  new DynamixelWorkbench(),
+                                  [](DynamixelWorkbench * /*unused*/) {
+                                    // Intentionally leak the workbench on process teardown.
+                                    // This avoids destructor-side shutdown behavior in the
+                                    // underlying library that can drop servo holding torque.
+                                  })
+                            : std::make_shared<DynamixelWorkbench>();
     if (!dxl_wb->init(serial_iface.c_str(), baudrate)) {
       lhd_error("DynamixelActuatorLayer::on_init(): Failed to open DynamielWorkbench (%s, %d)",
                 serial_iface, baudrate);
@@ -87,6 +114,8 @@ public:
     }
     lhd_info("DynamixelActuatorLayer::on_init(): torque_off_on_stop=%s",
              torque_off_on_stop ? "true" : "false");
+    lhd_info("DynamixelActuatorLayer::on_init(): preserve_torque_on_exit=%s",
+             preserve_torque_on_exit ? "true" : "false");
 
     // init actuators with param "actuators/<actuator_name>"
     for (std::size_t i = 0; i < ator_names.size(); ++i) {
