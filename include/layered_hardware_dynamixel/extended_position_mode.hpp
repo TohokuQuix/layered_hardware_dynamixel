@@ -29,7 +29,11 @@ public:
           get_display_name(*context_));
     }
 
-    write_items(context_, item_map_);
+    if (!write_items(context_, item_map_)) {
+      throw std::runtime_error(
+          "ExtendedPositionMode::starting(): Failed to apply item_map for " +
+          get_display_name(*context_));
+    }
     log_applied_config(context_, "extended_position");
 
     // use the present position as the initial command

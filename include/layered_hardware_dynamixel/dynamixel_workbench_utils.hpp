@@ -350,14 +350,45 @@ static inline bool clear_multi_turn(const std::shared_ptr<DynamixelActuatorConte
 
 static inline bool write_item(const std::shared_ptr<DynamixelActuatorContext> &context,
                               const std::string &item, const std::int32_t value) {
+  const auto *item_info = context->dxl_wb->getItemInfo(context->id, item.c_str());
+  const auto *torque_enable_info = context->dxl_wb->getItemInfo(context->id, "Torque_Enable");
+  const bool is_eeprom_item =
+      item_info != nullptr && torque_enable_info != nullptr &&
+      item_info->address < torque_enable_info->address;
+
+  std::int32_t torque_enable = 0;
+  const bool should_restore_torque =
+      is_eeprom_item && read_item(context, "Torque_Enable", &torque_enable) && torque_enable != 0;
+
+  if (should_restore_torque) {
+    const char *log = nullptr;
+    if (!context->dxl_wb->torqueOff(context->id, &log)) {
+      lhd_error("write_item(): Failed to disable torque before writing EEPROM item \"%s\" of %s: %s",
+                item.c_str(), get_display_name(*context),
+                (log ? log : "No log from DynamixelWorkbench::torqueOff()"));
+      return false;
+    }
+  }
+
   const char *log = nullptr;
-  if (!context->dxl_wb->itemWrite(context->id, item.c_str(), value, &log)) {
+  const bool write_ok = context->dxl_wb->itemWrite(context->id, item.c_str(), value, &log);
+  if (!write_ok) {
     lhd_error("write_item(): Failed to set control table item \"%s\" of %s: %s", //
               item, get_display_name(*context),
               (log ? log : "No log from DynamixelWorkbench::itemWrite()"));
-    return false;
   }
-  return true;
+
+  if (should_restore_torque) {
+    log = nullptr;
+    if (!context->dxl_wb->torqueOn(context->id, &log)) {
+      lhd_error("write_item(): Failed to re-enable torque after writing EEPROM item \"%s\" of %s: %s",
+                item.c_str(), get_display_name(*context),
+                (log ? log : "No log from DynamixelWorkbench::torqueOn()"));
+      return false;
+    }
+  }
+
+  return write_ok;
 }
 
 static inline bool write_items(
