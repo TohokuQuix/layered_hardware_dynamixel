@@ -8,8 +8,8 @@
 #include <optional>
 #include <string>
 #include <vector>
-#include <thread>
 #include <chrono>
+#include <thread>
 
 #include <layered_hardware_dynamixel/dynamixel_actuator_context.hpp>
 #include <layered_hardware_dynamixel/logging_utils.hpp>
@@ -326,6 +326,42 @@ enable_operating_mode(const std::shared_ptr<DynamixelActuatorContext> &context,
   return false;
 }
 
+static inline bool
+set_operating_mode_with_torque_off(const std::shared_ptr<DynamixelActuatorContext> &context,
+                                   bool (DynamixelWorkbench::*const set_func)(std::uint8_t, const char **),
+                                   const std::int32_t target_operating_mode) {
+  std::int32_t operating_mode = -1;
+  std::int32_t torque_enable = -1;
+  const bool has_mode = read_item(context, "Operating_Mode", &operating_mode);
+  const bool has_torque = read_item(context, "Torque_Enable", &torque_enable);
+
+  if (has_mode && has_torque && operating_mode == target_operating_mode && torque_enable == 0) {
+    return true;
+  }
+
+  const char *log = nullptr;
+  if (torque_enable != 0) {
+    if (!context->dxl_wb->torqueOff(context->id, &log)) {
+      lhd_error("set_operating_mode_with_torque_off(): Failed to disable torque of %s: %s",
+                get_display_name(*context),
+                (log ? log : "No log from DynamixelWorkbench::torqueOff()"));
+      return false;
+    }
+  }
+
+  if (has_mode && operating_mode == target_operating_mode) {
+    return true;
+  }
+
+  log = nullptr;
+  if (!(context->dxl_wb.get()->*set_func)(context->id, &log)) {
+    lhd_error("set_operating_mode_with_torque_off(): Failed to set operating mode of %s: %s",
+              get_display_name(*context), (log ? log : "No log from DynamixelWorkbench"));
+    return false;
+  }
+  return true;
+}
+
 static inline bool torque_off(const std::shared_ptr<DynamixelActuatorContext> &context) {
   const char *log = nullptr;
   if (!context->dxl_wb->torqueOff(context->id, &log)) {
@@ -334,6 +370,42 @@ static inline bool torque_off(const std::shared_ptr<DynamixelActuatorContext> &c
               (log ? log : "No log from DynamixelWorkbench::torqueOff()"));
     return false;
   }
+  return true;
+}
+
+static inline bool
+wait_until_goal_values_writable(const std::shared_ptr<DynamixelActuatorContext> &context,
+                                const std::chrono::milliseconds timeout =
+                                    std::chrono::milliseconds(1000),
+                                const std::chrono::milliseconds poll_interval =
+                                    std::chrono::milliseconds(5)) {
+  static rclcpp::Clock clock(RCL_STEADY_TIME);
+  const rclcpp::Time timeout_abs = clock.now() + rclcpp::Duration(timeout);
+
+  if (has_item(context, "Controller_State")) {
+    while (clock.now() <= timeout_abs) {
+      std::int32_t controller_state = 0;
+      if (!read_item(context, "Controller_State", &controller_state)) {
+        return false;
+      }
+      if (controller_state != 4 && controller_state != 6) {
+        break;
+      }
+      std::this_thread::sleep_for(poll_interval);
+    }
+
+    if (clock.now() > timeout_abs) {
+      lhd_error("wait_until_goal_values_writable(): Timed out waiting for %s to leave Process Torque On/Off state",
+                get_display_name(*context));
+      return false;
+    }
+  }
+
+  std::int32_t goal_update_delay_ms = 0;
+  if (try_read_item(context, "Goal_Update_Delay", &goal_update_delay_ms) && goal_update_delay_ms > 0) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(goal_update_delay_ms));
+  }
+
   return true;
 }
 
@@ -371,7 +443,26 @@ static inline bool write_item(const std::shared_ptr<DynamixelActuatorContext> &c
   }
 
   const char *log = nullptr;
-  const bool write_ok = context->dxl_wb->itemWrite(context->id, item.c_str(), value, &log);
+  bool write_ok = false;
+  constexpr int kMaxWriteAttempts = 3;
+  constexpr auto kWriteRetryDelay = std::chrono::milliseconds(20);
+  for (int attempt = 0; attempt < kMaxWriteAttempts; ++attempt) {
+    log = nullptr;
+    write_ok = context->dxl_wb->itemWrite(context->id, item.c_str(), value, &log);
+    if (write_ok) {
+      if (attempt > 0) {
+        lhd_warn("write_item(): Succeeded setting control table item \"%s\" of %s on retry %d/%d",
+                 item.c_str(), get_display_name(*context), attempt + 1, kMaxWriteAttempts);
+      }
+      break;
+    }
+    if (attempt + 1 < kMaxWriteAttempts) {
+      lhd_warn("write_item(): Retrying control table item \"%s\" of %s after failure %d/%d: %s",
+               item.c_str(), get_display_name(*context), attempt + 1, kMaxWriteAttempts,
+               (log ? log : "No log from DynamixelWorkbench::itemWrite()"));
+      std::this_thread::sleep_for(kWriteRetryDelay);
+    }
+  }
   if (!write_ok) {
     lhd_error("write_item(): Failed to set control table item \"%s\" of %s: %s", //
               item, get_display_name(*context),
@@ -389,6 +480,53 @@ static inline bool write_item(const std::shared_ptr<DynamixelActuatorContext> &c
   }
 
   return write_ok;
+}
+
+static inline bool write_item_and_confirm(const std::shared_ptr<DynamixelActuatorContext> &context,
+                                          const std::string &item,
+                                          const std::int32_t value,
+                                          const int max_attempts = 5,
+                                          const std::chrono::milliseconds retry_delay =
+                                              std::chrono::milliseconds(20)) {
+  for (int attempt = 0; attempt < max_attempts; ++attempt) {
+    if (!write_item(context, item, value)) {
+      if (attempt + 1 < max_attempts) {
+        std::this_thread::sleep_for(retry_delay);
+        continue;
+      }
+      return false;
+    }
+
+    std::int32_t readback = 0;
+    if (!read_item(context, item, &readback)) {
+      if (attempt + 1 < max_attempts) {
+        std::this_thread::sleep_for(retry_delay);
+        continue;
+      }
+      return false;
+    }
+
+    if (readback == value) {
+      if (attempt > 0) {
+        lhd_warn("write_item_and_confirm(): Confirmed control table item \"%s\" of %s on retry %d/%d",
+                 item.c_str(), get_display_name(*context), attempt + 1, max_attempts);
+      }
+      return true;
+    }
+
+    if (attempt + 1 < max_attempts) {
+      lhd_warn("write_item_and_confirm(): Readback mismatch for control table item \"%s\" of %s: wrote %d read %d (%d/%d)",
+               item.c_str(), get_display_name(*context), value, readback, attempt + 1,
+               max_attempts);
+      std::this_thread::sleep_for(retry_delay);
+      continue;
+    }
+
+    lhd_error("write_item_and_confirm(): Failed to confirm control table item \"%s\" of %s: wrote %d read %d",
+              item.c_str(), get_display_name(*context), value, readback);
+    return false;
+  }
+  return false;
 }
 
 static inline bool write_items(

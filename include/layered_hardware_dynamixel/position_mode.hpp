@@ -18,18 +18,48 @@ class PositionMode : public OperatingModeInterface {
 public:
   PositionMode(const std::shared_ptr<DynamixelActuatorContext> &context,
                const std::map< std::string, std::int32_t > &item_map)
-      : OperatingModeInterface("position", context), item_map_(item_map) {}
+      : OperatingModeInterface("position", context), item_map_(item_map) {
+    for (const auto &[item_name, item_value] : item_map_) {
+      if (item_name.rfind("Goal_", 0) == 0) {
+        deferred_item_map_.emplace(item_name, item_value);
+      } else {
+        initial_item_map_.emplace(item_name, item_value);
+      }
+    }
+  }
 
   virtual void starting() override {
-    // switch to position mode & torque enable
-    if (!enable_operating_mode(context_, &DynamixelWorkbench::setPositionControlMode, 3)) {
+    // For DYNAMIXEL-Y, Goal values cannot be written while Controller State is
+    // Process Torque On/Off, and Goal updates begin after Goal Update Delay.
+    // Apply non-goal configuration first, enable torque, wait until Goal writes
+    // are accepted, then write and confirm deferred Goal_* values.
+    if (!set_operating_mode_with_torque_off(context_, &DynamixelWorkbench::setPositionControlMode, 3)) {
       throw std::runtime_error("PositionMode::starting(): Failed to enable operating mode for " +
                                get_display_name(*context_));
     }
 
-    if (!write_items(context_, item_map_)) {
+    if (!write_items(context_, initial_item_map_)) {
       throw std::runtime_error("PositionMode::starting(): Failed to apply item_map for " +
                                get_display_name(*context_));
+    }
+
+    const char *log = nullptr;
+    if (!context_->dxl_wb->torqueOn(context_->id, &log)) {
+      throw std::runtime_error("PositionMode::starting(): Failed to enable torque for " +
+                               get_display_name(*context_) + ": " +
+                               (log ? log : "No log from DynamixelWorkbench::torqueOn()"));
+    }
+
+    if (!deferred_item_map_.empty() && !wait_until_goal_values_writable(context_)) {
+      throw std::runtime_error("PositionMode::starting(): Goal values are not writable for " +
+                               get_display_name(*context_));
+    }
+
+    for (const auto &[item_name, item_value] : deferred_item_map_) {
+      if (!write_item_and_confirm(context_, item_name, item_value)) {
+        throw std::runtime_error("PositionMode::starting(): Failed to apply " + item_name +
+                                 " for " + get_display_name(*context_));
+      }
     }
     log_applied_config(context_, "position");
 
@@ -70,6 +100,8 @@ public:
 
 private:
   const std::map<std::string, std::int32_t> item_map_;
+  std::map<std::string, std::int32_t> initial_item_map_;
+  std::map<std::string, std::int32_t> deferred_item_map_;
   double prev_pos_cmd_;
 };
 } // namespace layered_hardware_dynamixel
