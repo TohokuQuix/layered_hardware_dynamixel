@@ -34,31 +34,41 @@ public:
     // Apply non-goal configuration first, enable torque, wait until Goal writes
     // are accepted, then write and confirm deferred Goal_* values.
     if (!set_operating_mode_with_torque_off(context_, &DynamixelWorkbench::setPositionControlMode, 3)) {
-      throw std::runtime_error("PositionMode::starting(): Failed to enable operating mode for " +
-                               get_display_name(*context_));
+      const auto msg = "PositionMode::starting(): Failed to enable operating mode for " +
+                       get_display_name(*context_);
+      lhd_error("STARTUP_FAILURE: %s", msg);
+      throw std::runtime_error(msg);
     }
 
     if (!write_items(context_, initial_item_map_)) {
-      throw std::runtime_error("PositionMode::starting(): Failed to apply item_map for " +
-                               get_display_name(*context_));
+      const auto msg = "PositionMode::starting(): Failed to apply item_map for " +
+                       get_display_name(*context_);
+      lhd_error("STARTUP_FAILURE: %s", msg);
+      throw std::runtime_error(msg);
     }
 
     const char *log = nullptr;
     if (!context_->dxl_wb->torqueOn(context_->id, &log)) {
-      throw std::runtime_error("PositionMode::starting(): Failed to enable torque for " +
-                               get_display_name(*context_) + ": " +
-                               (log ? log : "No log from DynamixelWorkbench::torqueOn()"));
+      const auto msg = "PositionMode::starting(): Failed to enable torque for " +
+                       get_display_name(*context_) + ": " +
+                       (log ? log : "No log from DynamixelWorkbench::torqueOn()");
+      lhd_error("STARTUP_FAILURE: %s", msg);
+      throw std::runtime_error(msg);
     }
 
     if (!deferred_item_map_.empty() && !wait_until_goal_values_writable(context_)) {
-      throw std::runtime_error("PositionMode::starting(): Goal values are not writable for " +
-                               get_display_name(*context_));
+      const auto msg = "PositionMode::starting(): Goal values are not writable for " +
+                       get_display_name(*context_);
+      lhd_error("STARTUP_FAILURE: %s", msg);
+      throw std::runtime_error(msg);
     }
 
     for (const auto &[item_name, item_value] : deferred_item_map_) {
       if (!write_item_and_confirm(context_, item_name, item_value)) {
-        throw std::runtime_error("PositionMode::starting(): Failed to apply " + item_name +
-                                 " for " + get_display_name(*context_));
+        const auto msg = "PositionMode::starting(): Failed to apply " + item_name +
+                         " for " + get_display_name(*context_);
+        lhd_error("STARTUP_FAILURE: %s", msg);
+        throw std::runtime_error(msg);
       }
     }
     log_applied_config(context_, "position");

@@ -23,13 +23,17 @@ public:
   virtual void starting() override {
     // switch to current mode
     if (!enable_operating_mode(context_, &DynamixelWorkbench::setTorqueControlMode, 100)) {
-      throw std::runtime_error("TorqueMode::starting(): Failed to enable operating mode for " +
-                               get_display_name(*context_));
+      const auto msg = "TorqueMode::starting(): Failed to enable operating mode for " +
+                       get_display_name(*context_);
+      lhd_error("STARTUP_FAILURE: %s", msg);
+      throw std::runtime_error(msg);
     }
 
     if (!write_items(context_, item_map_)) {
-      throw std::runtime_error("TorqueMode::starting(): Failed to apply item_map for " +
-                               get_display_name(*context_));
+      const auto msg = "TorqueMode::starting(): Failed to apply item_map for " +
+                       get_display_name(*context_);
+      lhd_error("STARTUP_FAILURE: %s", msg);
+      throw std::runtime_error(msg);
     }
     log_applied_config(context_, "torque");
 
